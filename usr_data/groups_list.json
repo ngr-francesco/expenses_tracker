@@ -1,0 +1,26 @@
+[
+  {
+    "id": 1,
+    "name": "Developers",
+    "description": "A group for software developers",
+    "members": ["Alice", "Bob", "Charlie"]
+  },
+  {
+    "id": 2,
+    "name": "Designers",
+    "description": "A group for graphic and UI/UX designers",
+    "members": ["Eva", "Frank", "Grace"]
+  },
+  {
+    "id": 3,
+    "name": "Gaming Enthusiasts",
+    "description": "A group for gamers",
+    "members": ["Harry", "Ivy", "Jack"]
+  },
+  {
+    "id": 4,
+    "name": "Fitness Buddies",
+    "description": "A group for fitness and workout enthusiasts",
+    "members": ["Kevin", "Laura", "Mike"]
+  }
+]

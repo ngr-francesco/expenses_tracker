@@ -1,0 +1,31 @@
+{
+    "cred_0": {
+        "name": "cred_0",
+        "status": "Creditor",
+        "initial_amount": 20,
+        "transactions": [
+            "cred_0 receives from deb_3, 20 Euros"
+        ],
+        "settled": true
+    },
+    "cred_1": {
+        "name": "cred_1",
+        "status": "Creditor",
+        "initial_amount": 30,
+        "transactions": [
+            "cred_1 receives from deb_2, 30 Euros"
+        ],
+        "settled": true
+    },
+    "cred_2": {
+        "name": "cred_2",
+        "status": "Creditor",
+        "initial_amount": 50,
+        "transactions": [
+            "cred_2 receives from deb_1, 40 Euros",
+            "cred_2 receives from deb_3, 5 Euros",
+            "cred_2 receives from deb_0, 5 Euros"
+        ],
+        "settled": true
+    }
+}
