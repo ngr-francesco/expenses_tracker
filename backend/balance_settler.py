@@ -1,9 +1,15 @@
+__module__ = 'settling_up_algorithm'
+
 import numpy as np
 from enum import Enum
 from typing import Union
 import json
+import os
 
-EPSYLON = 1e-7
+from utils.utils import print_dict_in_dict
+
+# The minimum accuracy required for this application
+EUROCENT = 0.01
 
 class STATUS(Enum):
     Debitor = 0
@@ -23,7 +29,7 @@ class Member:
         print(f"Initialized {name}: {status} for {amount}")
     
     def is_settled(self):
-        if not self.settled and self.partial_amount < EPSYLON:
+        if not self.settled and self.partial_amount < EUROCENT:
             self.settled = True
         return self.settled
     
@@ -33,8 +39,8 @@ class Member:
     def process_transaction(self,person,amount):
         self.partial_amount -= amount
         msg = 'sends to' if self.status == STATUS.Debitor else 'receives from'
-        transaction_info = {'name': person.name,'amount': amount,'msg': msg}
-        if self.partial_amount < -EPSYLON:
+        transaction_info = {'name': person.name,'amount': round(amount,2),'msg': msg}
+        if self.partial_amount < -EUROCENT:
             raise ValueError(f"This transaction between {self.name} to {person.name} for {amount}€ surpasses the partial"
                              f" amount of {self.name} of {self.partial_amount}")
         self.transactions.append(transaction_info)
@@ -63,10 +69,18 @@ def sort_members(members_0: Union[list,Member], *add_members: Union[list,Member]
     return to_return
 
 class BalanceSettler:
-    def __init__(self,debitors,creditors):
+    def __init__(self,debitors = [],creditors = [], folder_path = ''):
         self.debitors = debitors
         self.creditors = creditors
-        self.check_overall_balance()
+        self.folder_path = folder_path
+    
+    def add_person(self,name,amount,status = None):
+        if not status:
+            status = STATUS.Debitor if amount < 0 else STATUS.Creditor
+        if status == STATUS.Debitor:
+            self.debitors.append(Member(name,abs(amount),status))
+        else:
+            self.creditors.append(Member(name,abs(amount),status))
 
     def check_overall_balance(self):
         debit = 0
@@ -75,7 +89,7 @@ class BalanceSettler:
         credit = 0
         for c in self.creditors:
             credit += c.init_amount
-        if abs(credit - debit) > EPSYLON:
+        if abs(credit - debit) > 2*EUROCENT:
             raise ValueError("The group debits and credits are not balanced!")
 
     def transaction(self,debitor,creditor):
@@ -87,6 +101,7 @@ class BalanceSettler:
         creditor.process_transaction(debitor,amount)
 
     def settle_up(self):
+        self.check_overall_balance()
         debitors = self.debitors
         creditors = self.creditors
         # sort from largest to smallest
@@ -98,27 +113,30 @@ class BalanceSettler:
 
     def save_transaction_record(self, verbose = False):
         debitors_dict = {}
-        for d in debitors:
+        for d in self.debitors:
             debitors_dict[d.name] = d.summary()
 
         creditors_dict = {}
-        for c in creditors:
+        for c in self.creditors:
             creditors_dict[c.name] = c.summary()
 
-        with open('transaction_records/debitors_transaction_record.json', 'w+') as file:
+        with open(os.path.join(self.folder_path,'debitors_transaction_record.json'), 'w+') as file:
             json.dump(debitors_dict, file, indent = 4)
-        with open('transaction_records/creditors_transaction_record.json', 'w+') as file:
+        with open(os.path.join(self.folder_path,'creditors_transaction_record.json'), 'w+') as file:
             json.dump(creditors_dict, file, indent = 4)
         if verbose:
-            print(debitors_dict)
-            print(creditors_dict)
-
+            print("Saved transaction record to files:")
+            d_to_print = [debitors_dict,creditors_dict]
+            msgs = ["Debitors", "Creditors"]
+            for d,msg in zip(d_to_print,msgs):
+                print_dict_in_dict(d,msg)
 
 if __name__ == '__main__':
     owed = [20,30,50]
     owes = [5,40,30,25]
+    folder_path = 'transaction_records'
     debitors = [Member(f'deb_{k}',owes[k],STATUS.Debitor) for k in range(len(owes))]
     creditors = [Member(f'cred_{k}',owed[k], STATUS.Creditor) for k in range(len(owed))]
-    bal_settler = BalanceSettler(debitors,creditors)
+    bal_settler = BalanceSettler(debitors,creditors, folder_path= folder_path)
     bal_settler.settle_up()
     bal_settler.save_transaction_record(verbose=True)
