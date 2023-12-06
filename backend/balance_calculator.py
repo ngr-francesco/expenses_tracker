@@ -1,28 +1,13 @@
 
-from warnings import warn 
 import os
 import json
-from utils.utils import print_dict_in_dict
-
-class Member:
-    def __init__(self, name, spent_total, days_spent, folder = ''):
-        self.name = name
-        self.spent_total = spent_total
-        self.days_spent = days_spent
-        self.balance = 0
-        self.folder_path = folder
-    
-    def summary(self):
-        s = {
-            "name": self.name,
-            "total spent": self.spent_total,
-            "days spent": self.days_spent,
-            "balance": self.balance
-        }
-        return s
+from utils.printing import print_dict_in_dict
+from utils.logging import get_logger
+from cls.member import Member
 
 class BalanceCalculator:
     def __init__(self, members, cycle_length):
+        self.logger = get_logger(self.__name__)
         self.members = members
         self.cycle_length = cycle_length
         self.check_member_data()
@@ -33,10 +18,12 @@ class BalanceCalculator:
                 raise ValueError(f"The data for {m.name}, {m.days_spent} days spent, is incompatible with the cycle length of {self.cycle_length} days.")
         group_days_spent = sum([m.days_spent for m in self.members])
         if group_days_spent == 0:
-            warn("Group days spent is zero, this will be counted as one to avoid errors.")
+            self.logger.warning("Group days spent is zero, this will be counted as one to avoid errors.")
     
-    def add_member(self, name,spent_total, days_spent):
-        self.members.append(Member(name,spent_total,days_spent))
+    def add_member(self, member = None, name = '',spent_total = 0, days_spent = 0):
+        if member is None:
+            member = Member(name,spent_total=spent_total,days_spent=days_spent)
+        self.members.append(member)
         self.check_member_data()
         
     def calculate_balances(self):
