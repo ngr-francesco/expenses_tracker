@@ -4,10 +4,15 @@ from utils.id_factory import IdFactory
 from cls.transaction import Transaction
 
 class Member:
-    def __init__(self,name,balance = 0,status = None, spent_total = 0, days_spent = 0):
-        self.logger = get_logger(self.__name__)
+    def __init__(self,name = '',balance = 0,status = None, spent_total = 0, days_spent = 0, id = None):
+        self.logger = get_logger(Member.__name__)        
         self.name = name
-        self.id = IdFactory.get_obj_id(self)
+        # If we're loading a member
+        if id is not None:
+            self.id = id
+        # If we're initializing a new member
+        else:
+            self.id = IdFactory.get_obj_id(self)
         self._settled = False
         self.status = status
         self.balance = balance

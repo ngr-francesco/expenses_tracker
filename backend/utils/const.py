@@ -1,4 +1,5 @@
 from enum import Enum
+import os
 
 EUROCENT = 0.01
 
@@ -9,6 +10,8 @@ default_ids = {
     'List': 'ls0000',
     'Transaction': 'tr0000'
 }
+
+default_data_dir = '../usr_data'
 
 class ItemPrintEnum(Enum):
     def __str__(self) -> str:

@@ -1,13 +1,12 @@
 
 import os
 import json
-from utils.printing import print_dict_in_dict
 from utils.logging import get_logger
 from cls.member import Member
 
 class BalanceCalculator:
     def __init__(self, members, cycle_length):
-        self.logger = get_logger(self.__name__)
+        self.logger = get_logger(BalanceCalculator.__name__)
         self.members = members
         self.cycle_length = cycle_length
         self.check_member_data()
@@ -39,8 +38,8 @@ class BalanceCalculator:
         with open(os.path.join(self.folder_path,'balance_record.json'),'w+') as file:
             json.dump(dict_to_save,file, indent=4)
         if verbose:
-            print_dict_in_dict(dict_to_save,"Saved balances to file")
-
+            p = json.dumps(dict_to_save, indent = 4)
+            print(p)
 
 if __name__ == '__main__':
     pass

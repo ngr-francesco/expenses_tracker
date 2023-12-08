@@ -6,7 +6,6 @@ from typing import Union
 import json
 import os
 
-from utils.printing import print_dict_in_dict
 from utils.const import EUROCENT, STATUS
 from cls.member import Member
 
@@ -77,7 +76,7 @@ class BalanceSettler:
             while not cur_d.is_settled():
                 self.transaction(cur_d,creditors[0])
                 creditors = sort_members(creditors)[0]
-                
+
         # Update members to keep track of settle up process
         for member in members:
             member.finalize_settle_up()
@@ -100,7 +99,8 @@ class BalanceSettler:
             d_to_print = [debitors_dict,creditors_dict]
             msgs = ["Debitors", "Creditors"]
             for d,msg in zip(d_to_print,msgs):
-                print_dict_in_dict(d,msg)
+                print(msg)
+                print(json.dumps(d,indent = 4))
 
 if __name__ == '__main__':
     owed = [20,30,50]
