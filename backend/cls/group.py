@@ -1,9 +1,11 @@
-from utils.id_factory import IdFactory
 from member import Member
 import os
 import json
-from utils.const import default_data_dir
 from list import List
+
+from backend.utils.id_factory import IdFactory
+from backend.utils.const import default_data_dir
+
 
 
 class Group:

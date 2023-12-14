@@ -1,8 +1,9 @@
 from utils.logging import get_logger
 import os, json, shutil
-from member import Member
-from utils.id_factory import IdFactory
-from utils.const import default_data_dir
+
+from backend.cls.member import Member
+from backend.utils.id_factory import IdFactory
+from backend.utils.const import default_data_dir
 
 class ListItem:
     def __init__(self,name,owner,amount = 0,members_involved = {}):

@@ -1,7 +1,7 @@
-from utils.const import EUROCENT, STATUS, MSG
-from utils.logging import get_logger
-from utils.id_factory import IdFactory
-from cls.transaction import Transaction
+from backend.utils.const import EUROCENT, STATUS, MSG
+from backend.utils.logging import get_logger
+from backend.utils.id_factory import IdFactory
+from backend.cls.transaction import Transaction
 
 class Member:
     def __init__(self,name = '',balance = 0,status = None, spent_total = 0, days_spent = 0, id = None):

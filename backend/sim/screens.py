@@ -9,16 +9,25 @@ Moving across screens:
 
 
 import abc
-from buttons import *
-class Screen(abc.ABC):
-    def __init__(self):
+from backend.sim.buttons import *
+class Screen(abc.ABC, Singleton):
+    def __init__(self, screens = {}, buttons = {}):
         self.title = ''
-        self.reachable_screens = {}
-        self.action_buttons = {}
-        self.buttons = list(self.reachable_screens.keys()) + list(self.action_buttons.keys())
-        self.buttons = [(i,button) for i,button in enumerate(self.buttons)]
+        self.reachable_screens = screens
+        self.action_buttons = buttons
+        self.add_instances_to_dictionaries()
+        
+        # For UI purposes
+        self.pressables = list(self.reachable_screens.values()) + list(self.action_buttons.values())
+        self.pressables = [(i,pressable) for i,pressable in enumerate(self.pressables)]
+        
+        # Set by screen that opens this screen
         self.coming_from = None
+    
+    def __str__(self):
+        return self.title
 
+        
     def change_screen(self,button_name):
         self.reachable_screens[button_name].open(self)
     
@@ -33,21 +42,21 @@ class Screen(abc.ABC):
         self.show_buttons()
 
     def show_buttons(self):
-        for i,button in self.buttons:
+        for i,button in enumerate(self.action_buttons):
             print(i,button)
         valid_choice = False
         while not valid_choice:
             try:
                 choice = int(input())
-                if 0 <= choice < len(self.buttons):
+                if 0 <= choice < len(self.pressables):
                     valid_choice = True
                 else:
                     print("Invalid choice. Choose again.")
             except ValueError:
                 print("Inputs are expected to be numbers.")
 
-            
-        chosen_button = self.buttons[choice][1]
+             
+        chosen_button = self.pressables[choice][1]
         if chosen_button in self.reachable_screens:
             self.change_screen(chosen_button)
         elif choice in self.action_buttons:
@@ -60,18 +69,39 @@ class Screen(abc.ABC):
     
     def add_screens(self, screens_dict:dict):
         self.reachable_screens.update(screens_dict)
+    
+    def add_instances_to_dictionaries(self):
+        """
+        Check if the screens and buttons required by this screen were initialized before.
+        If they were, get their singleton instance, otherwise initialize them.
+        """
+        for screen in self.reachable_screens:
+            if screen.has_instance(screen):
+                self.reachable_screens[screen] = screen.get_instance(screen)
+            else:
+                self.reachable_screens[screen] = screen()
+        for button in self.action_buttons:
+            if button.has_instance(button):
+                self.action_buttons[button] = button.get_instance(screen)
+            else:
+                self.action_buttons[button] = button()
+class SettingsScreen(Screen):
+    def __init__(self):
+        super().__init__()
 
 class MainScreen(Screen):
     def __init__(self):
+        super().__init__
         self.title = 'Main Screen'
         self.text = ''
         self.reachable_screens = {
-            'new_group': None,
-            'settings': None,
+            SettingsScreen: None,
         }
         self.action_buttons = {
-            'Quit': QuitButton()
+            NewGroupButton: None,
+            QuitButton: None
         }
+        super().__init__(self.reachable_screens,self.action_buttons)
 
         
         

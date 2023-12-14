@@ -1,8 +1,9 @@
 
 import os
 import json
-from utils.logging import get_logger
-from cls.member import Member
+
+from backend.utils.logging import get_logger
+from backend.cls.member import Member
 
 class BalanceCalculator:
     def __init__(self, members, cycle_length):

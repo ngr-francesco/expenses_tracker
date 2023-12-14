@@ -1,6 +1,8 @@
 import json
-from utils.const import default_ids, default_data_dir
 import os
+
+from backend.utils.const import default_ids, default_data_dir
+
 
 class IdFactory:
     file_path = os.path.join(default_data_dir,'id_factory','ids.json')

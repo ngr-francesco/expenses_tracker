@@ -6,8 +6,8 @@ from typing import Union
 import json
 import os
 
-from utils.const import EUROCENT, STATUS
-from cls.member import Member
+from backend.utils.const import EUROCENT, STATUS
+from backend.cls.member import Member
 
 def sort_members(members_0: Union[list,Member], *add_members: Union[list,Member]) -> tuple[Member]:
     members_list = [members_0]

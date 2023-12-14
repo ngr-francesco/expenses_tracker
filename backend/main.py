@@ -2,9 +2,8 @@
 This serves as a simulation to test the backend components
 """
 
-def run_app():
-    while True:
-        return 0 
+from backend.sim.application import application
 
 if __name__ == '__main__':
-    run_app()
+    app = application()
+    app.run()
