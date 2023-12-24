@@ -10,6 +10,10 @@ class LogLevel(Enum):
     ERROR = 4
     CRITICAL = 5 
 
+    def __le__(self,other):
+        if isinstance(other,LogLevel):
+            return self.value <= other.value
+
 class Logger:
 
     # Static variable to hold the logging level.
@@ -21,12 +25,6 @@ class Logger:
         Initialize the logger in the DEBUG level.
         """
         self.name = name
-    
-    def set_level(self, level):
-        """
-        Set the logging level.
-        """
-        self.level = level
 
     def log(self, level, message):
         """
@@ -42,8 +40,8 @@ class Logger:
         """
         if Logger.use_timestamps:
             timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-            return f"{timestamp} {level.name}\t{self.name}: {message}"
-        return f"{level.name}\t{self.name}: {message}"
+            return f"{timestamp} {level.name}\t{self.name}: {message}\n"
+        return f"{level.name}\t{self.name}: {message}\n"
 
     def diagnostic(self, message):
         """
@@ -88,7 +86,7 @@ class Logger:
         """
         if level in LogLevel:
             Logger.level = level
-            sys.stdout.write(f"Set log level to {level.name}")
+            sys.stdout.write(f"Set log level to {level.name}\n")
             sys.stdout.flush()
         else:
             raise ValueError(f"Invalid log level: {level}")

@@ -6,11 +6,14 @@ from backend.utils.logging import get_logger
 from backend.cls.member import Member
 
 class BalanceCalculator:
-    def __init__(self, members, cycle_length):
+    def __init__(self, expenses_list):
         self.logger = get_logger(BalanceCalculator.__name__)
-        self.members = members
-        self.cycle_length = cycle_length
+        # Sufficient to have a list in this case
+        self.members = list(expenses_list.members.values())
+        self.cycle_length = expenses_list.cycle_length
+        self.list = expenses_list
         self.check_member_data()
+
 
     def check_member_data(self):
         for m in self.members:
@@ -33,6 +36,7 @@ class BalanceCalculator:
         daily_expense = group_total/group_days_spent
         for m in self.members:
             m.balance = m.spent_total - m.days_spent*daily_expense
+        return [m.balance for m in self.members]
     
     def save_balances(self, verbose = False):
         dict_to_save = {m.name: m.summary() for m in self.members}

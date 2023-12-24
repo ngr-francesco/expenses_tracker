@@ -1,8 +1,9 @@
 import os
 import json
 
-from backend.utils.id_factory import IdFactory
+from backend.utils.ids import IdFactory
 from backend.utils.const import MSG, default_data_dir
+from backend.cls.saveable import Saveable
 
 def get_transaction_info_from_id(transaction_id,path):
     if not os.path.exists(path):
@@ -13,8 +14,9 @@ def get_transaction_info_from_id(transaction_id,path):
     return data[transaction_id]
 
 
-class Transaction:
+class Transaction(Saveable):
     def __init__(self, sender, receiver, amount, sent_received, data_dir = os.path.join(default_data_dir,'transactions.json')):
+        super().__init__()
         self.sender = sender
         self.receiver = receiver
         self.amount = amount
@@ -39,7 +41,7 @@ class Transaction:
         }
         return summary_dict
     
-    def save_transaction(self):
+    def save_data(self):
         file_path = os.path.join(self.data_dir,'transactions.json')
         transactions = {}
         if not os.path.exists(self.data_dir):

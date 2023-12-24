@@ -3,42 +3,48 @@ import os
 import json
 from list import List
 
-from backend.utils.id_factory import IdFactory
+from backend.utils.ids import IdFactory
 from backend.utils.const import default_data_dir
+from backend.cls.saveable import Saveable
 
 
 
-class Group:
+class Group(Saveable):
     def __init__(self,name,members = None, data_dir = default_data_dir, load_from_file = False, load_file_path = ''):
-        self.name = name
-        self.id = IdFactory.get_obj_id(self)
-        self.data_dir = data_dir + 'Group_' + self.id
-        if members:
-            assert type(members) == list, "members argument to Group must be a list"
-            assert type(members[0]) == Member, "members list must contain Member objects"
-            self.members = {
-                m.id: m for m in members
-            }
-        self.lists = {}
-        if load_from_file:
+        super().__init__()
+        if not load_from_file:
+            self.name = name
+            self.id = IdFactory.get_obj_id(self)
+            self.data_dir = data_dir + 'Group_' + self.id
+            if members:
+                assert type(members) == list, "members argument to Group must be a list"
+                assert type(members[0]) == Member, "members list must contain Member objects"
+                self.members = {
+                    m.id: m for m in members
+                }
+            self.lists = {}
+            self.save_data()
+        else:
             self.load_from_file(load_file_path)
-            IdFactory.roll_back_id(self)
 
+    @Saveable.affects_class_data(log_msg= "Added new member")
     def add_member(self,member = None,name = ''):
         if not member:
             if name == '':
                 raise ValueError("Either member or name of new member must be specified!")
             member = Member(name)
         self.members[member.id] = member
-    
+    @Saveable.affects_class_data(log_msg="Removed member")
     def remove_member(self,member = None, id = None):
         if id is None:
             id = member.id
         self.members.pop(id)
     
+    @Saveable.affects_class_data(log_msg="Addded new list")
     def add_list(self,list):
         self.lists[list.id] = list
     
+    @Saveable.affects_class_data(log_msg="Removed list")
     def remove_list(self,list = None, id = None):
         if id is None:
             id = list.id
