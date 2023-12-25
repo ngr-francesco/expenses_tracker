@@ -59,12 +59,12 @@ class Group(Saveable):
                 l.id : os.path.join(l.data_dir,l.file_name) for l in self.lists
             },
             'members': {
-                m.id : m.member_summary() for m in self.members
+                m.id for m in self.members
             }
         }
         return summary_dict
     
-    def save_group_info(self):
+    def save_data(self):
         if not os.path.exists(self.data_dir):
             os.makedirs(self.data_dir)
         with open(os.path.join(self.data_dir,f'{self.id}_group_info.json'),'w+') as file:
@@ -82,6 +82,6 @@ class Group(Saveable):
         for l_id, l_path in self.lists:
             self.lists[l_id] = List(load_from_file=True, load_file_path = l_path)
         
-        for m_id, m_dict in self.members:
-            self.members[m_id] = Member(*m_dict)
+        for m_id in self.members:
+            self.members[m_id] = Member(id = m_id)
 

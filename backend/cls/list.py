@@ -75,7 +75,7 @@ class ListItem():
 
 class List(Saveable):
     def __init__(self,name:str, 
-                 members: ty.List[ty.Union[dict,Member]], 
+                 members: ty.List[ty.Union[str,Member]], 
                  data_dir: str = default_data_dir, 
                  file_name: str = "list_info.json", 
                  load_from_file: bool = False, 
@@ -95,6 +95,8 @@ class List(Saveable):
         self.file_name = f'{self.id}_{file_name}'
         self.data_dir = os.path.join(data_dir , f'List_{self.id}')
         self.cycle_length = cycle_length
+        # To make sure all the required attributes were set I first
+        # set them, then if the list should be loaded from file, we load it.
         if load_from_file:
             self.load(load_file_path)
             IdFactory.roll_back_id(self)
@@ -131,10 +133,11 @@ class List(Saveable):
         if os.path.exists(file_path):
             with open(file_path,'r') as file:
                 data = json.load(file)
+
             for key,value in data.items():
                 if key == 'members':
-                    for id,member_dict in value.items():
-                        self.members[id] = Member(*member_dict)
+                    for id in value:
+                        self.members[id] = Member(id)
                 elif key == 'items':
                     for id, item in value.items():
                         self.items[id] = ListItem(*item)
@@ -153,10 +156,11 @@ class List(Saveable):
         self.logger.debug(f"Saving data from list to {self.data_dir}/{self.file_name}")
         if not os.path.exists(self.data_dir):
             os.makedirs(self.data_dir)
-        members_dict = {member.id : member.summary() for member in self.members}
         dict_to_save = {
             'name': self.name,
-            'members': members_dict,
+            'data_dir': self.data_dir,
+            'id': self.id,
+            'members': {member.id for member in self.members},
             'items': self.items
         }
         self.logger.diagnostic(json.dumps(dict_to_save,indent = 4))
@@ -167,8 +171,11 @@ class List(Saveable):
     
     @Saveable.affects_class_data("Adding member to list's included members")
     def add_member(self,member):
-        if not isinstance(member, Member):
-            member = Member(*member)
+        # If an Id to be loaded from files is given, it will be a string
+        if isinstance(member, str):
+            member = Member(member)
+        if member.id in self.members:
+            raise ValueError(f"The member you're trying to add is already in this List {member.name}")
         self.members[member.id] = member
 
         

@@ -34,8 +34,8 @@ class Transaction(Saveable):
     def summary(self):
         summary_dict = {
             'transaction_id': self.id,
-            'sender': self.sender.member_summary(),
-            'receiver': self.receiver.member_summary(),
+            'sender': self.sender.id,
+            'receiver': self.receiver.id,
             'amount': self.amount,
             'direction': str(self.sent_received)
         }

@@ -19,27 +19,27 @@ class Member(Saveable):
                  usr_id = None,
                  new_member = False):
         super().__init__()
-        if new_member:        
-            self.name = name
-            self.usr_id = None
-            # If we're loading a member
-            if id is not None:
-                self.id = id
-            # If we're initializing a new member
-            else:
-                self.id = IdFactory.get_obj_id(self)
-            self._settled = False
-            self.status = status
-            self.balance = balance
-            self.spent_total = spent_total
-            self.days_spent = days_spent
-            self.transactions = []
-            self.logger.debug(f"Initialized member: {name} status: {status} for amount: {balance}")
-            self.save_data()
+        self.name = name
+        self.usr_id = None
+        # If we're loading a member
+        if id is not None:
+            self.id = id
+        # If we're initializing a new member
         else:
+            self.id = IdFactory.get_obj_id(self)
+        self._settled = False
+        self.status = status
+        self.balance = balance
+        self.spent_total = spent_total
+        self.days_spent = days_spent
+        self.transactions = []
+        self.logger.debug(f"Initialized member: {name} status: {status} for amount: {balance}")
+        self.save_data()
+        
+        if not new_member:
             member_dict = self.load_from_members_file(name,id)
-            for key,value in member_dict.items():
-                setattr(self,key,value)
+            IdFactory.roll_back_id(self)
+            
         # If a usr_id was given we connect this member to that user
         if usr_id:
             self.connect_to_usr_profile(usr_id)
@@ -59,13 +59,23 @@ class Member(Saveable):
         return self.usr_id is not None
     
     def load_from_members_file(self,name = '', id = None):
-        with open(os.path.join(default_data_dir,default_members_file),'r') as file:
-            data = json.load(file)
-            if id:
-                member_dict = data['members_from_id'][id]
-            else:
-                member_dict = data['members_from_name'][name]
-        return member_dict
+        file_path = os.path.join(default_data_dir,default_members_file)
+        member_dict = {}
+        if os.path.exists(file_path):
+            with open(os.path.join(default_data_dir,default_members_file),'r') as file:
+                data = json.load(file)
+                if id and id in data['members_from_id']:
+                    member_dict = data['members_from_id'][id]
+                elif id is None and name in data['members_from_name']:
+                    member_dict = data['members_from_name'][name]
+                else:
+                    self.logger.warning(f"Member {name} with given id: {id} was not found in members file.")
+                    return
+                
+            for key,value in member_dict.items():
+                setattr(self,key,value)
+        else:
+            self.logger.warning("Trying to load member data from non-existing file.")
     
     def is_settled(self):
         if not self._settled and self.partial_amount < EUROCENT:
@@ -95,7 +105,6 @@ class Member(Saveable):
                                 " this will most likely affect the overall balance of this group/list")
         self.transactions = []
         self.logger.debug("Saving member data after clearing transactions")
-        self.save_data()
     
     @Saveable.affects_class_data(log_msg="Processing transaction to/from other member")
     def process_transaction(self,person,amount):
@@ -146,11 +155,29 @@ class Member(Saveable):
         return summary_dict
     
     def __json__(self):
-        pass
+        return self.id
 
     def save_data(self):
-        dict_to_save = self.balance_summary()
-        #TODO: Finish this
+        member_dict = self.balance_summary()
+        file_path = os.path.join(default_data_dir,default_members_file)
+        if os.path.exists(file_path):
+            with open(file_path,'r') as file:
+                data_dict = json.load(file)
+
+            data_dict['members_from_id'][self.id] = member_dict
+            data_dict['members_from_name'][self.name] = member_dict
+        else:
+            data_dict = {
+                'members_from_id': {self.id: member_dict},
+                'members_from_name': {self.name: member_dict}
+            }
+            
+        # Member data is only saved in the all_members file, other data 
+        # structures will only reference the members through their ids.
+        with open(file_path, 'w+') as file:
+            json.dump(data_dict, file, indent=4)
+        self.logger.debug(f"Saved member data for {self.name}, with id: {self.id} to file {file_path}")
+
 
     
     
