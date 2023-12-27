@@ -25,8 +25,10 @@ class Group(Saveable):
         self.save_data()
 
         if load_from_file:
-            IdFactory.roll_back_id()
-            self.load_from_file(load_file_path)
+            group_loaded = self.load_from_file(load_file_path)
+            if group_loaded:
+                IdFactory.roll_back_id()
+
 
     @Saveable.affects_class_data(log_msg= "Added new member")
     def add_member(self,member = None,name = '', id = None):
@@ -63,7 +65,7 @@ class Group(Saveable):
                 l.id : os.path.join(l.data_dir,l.file_name) for l in self.lists
             },
             'members': {
-                m.id: m.group_summary() for m in self.members
+                m.id: m.group_summary() for m in self.members.values()
             }
         }
         return summary_dict
@@ -76,10 +78,12 @@ class Group(Saveable):
     
     def load_from_file(self, path):
         if not os.path.exists(path):
-            raise ValueError(f"Cannot read file from inexistent path {path}")
-    
+            self.logger.warning(f"Cannot read file from inexistent path {path}")
+            return False
+        
         with open(path,'r') as file:
             data = json.load(file)
+            
         for key,value in data:
             if key == 'members':
                 for m_id, m_dict in value.items():
@@ -91,6 +95,7 @@ class Group(Saveable):
                     self.lists[l_id] = List(load_from_file=True, load_file_path = l_path)
             else:
                 setattr(self,key,value)
+        return True
         
         
         

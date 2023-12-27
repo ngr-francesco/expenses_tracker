@@ -36,3 +36,4 @@ yarn-error.*
 
 # python
 __pycache__
+usr_data/*

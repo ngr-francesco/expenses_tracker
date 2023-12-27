@@ -69,7 +69,7 @@ class IdFactory:
     def _increment_ids(name):
         id = IdFactory.next_ids[name]
         id_N = int(id[2:]) + 1
-        next_id = id[:2] + str(id_N)
+        next_id = id[:2] + f'{id_N:04d}'
         IdFactory.next_ids[name] = next_id
         IdFactory._save_ids()
 

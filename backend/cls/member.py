@@ -27,22 +27,29 @@ class Member(Saveable):
         # If we're initializing a new member
         else:
             self.id = IdFactory.get_obj_id(self)
+        # Member data used by lists and groups
         self._settled = False
         self.status = status
         self.balance = balance
         self.spent_total = spent_total
         self.days_spent = days_spent
         self.transactions = []
+        # Quantities required to calculate balances
+        self.partial_amount = 0
+        self.init_amount = 0
+
         self.logger.debug(f"Initialized member: {name} status: {status} for amount: {balance}")
-        self.save_data()
+        
         
         if not new_member:
-            self.load_from_members_file(name,id)
-            IdFactory.roll_back_id(self)
+            loaded_member = self.load_from_members_file(name,id)
+            if loaded_member:
+                IdFactory.roll_back_id(self)
             
         # If a usr_id was given we connect this member to that user
         if usr_id:
             self.connect_to_usr_profile(usr_id)
+        self.save_data()
             
     @Saveable.affects_class_data(log_msg="Connected member to user profile")
     def connect_to_usr_profile(self,usr_id):
@@ -74,8 +81,10 @@ class Member(Saveable):
                 
             for key,value in member_dict.items():
                 setattr(self,key,value)
+            return True
         else:
             self.logger.warning("Trying to load member data from non-existing file.")
+            return False
     
     def set_data(self,data_dict):
         """
@@ -189,6 +198,9 @@ class Member(Saveable):
             with open(file_path,'r') as file:
                 data_dict = json.load(file)
 
+            if self.id in data_dict['members_from_id'] and data_dict['members_from_id'][self.id]['name'] != self.name:
+                raise Exception("Two members share the same id, this is a bug.")
+            
             data_dict['members_from_id'][self.id] = member_dict
             data_dict['members_from_name'][self.name] = member_dict
         else:

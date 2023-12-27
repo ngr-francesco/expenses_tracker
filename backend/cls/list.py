@@ -59,18 +59,15 @@ class ListItem():
         summary_dict = {
             'name': self.name,
             'id': self.id,
-            'bought_by': self.bought_by,
+            'bought_by': self.bought_by.id,
             'members_involved': [m for m in self.members_involved],
-            'shares': [(m.name,self.shares[m]) for m in self.members_involved]
+            'shares': [(m.name,self.shares[m_id]) for m_id,m in self.members_involved.items()]
         }
         return summary_dict
     
     def __str__(self):
         printable_summary = json.dumps(self.summary(), indent=4)
         return printable_summary
-    
-    def __json__(self):
-        return self.summary()
 
 
 class List(Saveable):
@@ -85,11 +82,14 @@ class List(Saveable):
         self.name = name
         self.id = IdFactory.get_obj_id(self)
         if members:
+            print("Before",members)
             assert type(members) == list, "members argument to List must be a list"
             assert type(members[0]) == Member, "members list must contain Member objects"
+            print("After", members)
             self.members = {
                 m.id: m for m in members
             }
+            print(self.members)
 
         self.items = {}
         self.file_name = f'{self.id}_{file_name}'
@@ -98,8 +98,10 @@ class List(Saveable):
         # To make sure all the required attributes were set I first
         # set them, then if the list should be loaded from file, we load it.
         if load_from_file:
-            self.load(load_file_path)
-            IdFactory.roll_back_id(self)
+            list_loaded = self.load(load_file_path)
+            if list_loaded:
+                IdFactory.roll_back_id(self)
+
     @Saveable.affects_class_data(log_msg="Adding item to list")   
     def add_item(self,item: ty.Union[dict,ListItem]):
         if not isinstance(item, ListItem):
@@ -143,7 +145,9 @@ class List(Saveable):
 
                 elif key == 'items':
                     for id, item in value.items():
-                        self.items[id] = ListItem(*item)
+                        item_data = self.preprocess_item_data(item)
+                        
+                        self.items[id] = ListItem(*item_data)
                         
                 elif hasattr(self,key) and not key == 'members':
                     self.logger.diagnostic(f"Setting list attribute {key} = {value}")
@@ -153,8 +157,26 @@ class List(Saveable):
                 self.file_name = os.path.basename(file_path)
 
             self.logger.debug(f"Loaded list data from file {file_path}")
+            return True
         else:
             self.logger.warning(f"Tried to load from non-existing file {file_path}")
+            return False
+        
+    def preprocess_item_data(self,item_dict):
+        """
+        Since when saving item data we only save ids of users,
+        here we preprocess their ids and return the actual member classes.
+        """
+
+        buyer_id = item_dict['bought_by']
+        item_dict['bought_by'] = self.members[buyer_id]
+
+        members_involved = item_dict['members_involved']
+        item_dict['members_involved'] = {
+            m_id: self.members[m_id] for m_id in members_involved
+        }
+
+        return item_dict
     
     def save_data(self):
         self.logger.debug(f"Saving data from list to {self.data_dir}/{self.file_name}")
@@ -164,13 +186,13 @@ class List(Saveable):
             'name': self.name,
             'data_dir': self.data_dir,
             'id': self.id,
-            'members': {member.id: member.list_summary() for member in self.members},
-            'items': self.items
+            'members': {member.id: member.list_summary() for member in self.members.values()},
+            'items': {item.id: item.summary() for item in self.items.values()}
         }
         self.logger.diagnostic(json.dumps(dict_to_save,indent = 4))
         file_path = os.path.join(self.data_dir,self.file_name)
-        with open(file_path) as file:
-            json.dump(dict_to_save, file)
+        with open(file_path, 'w+') as file:
+            json.dump(dict_to_save, file, indent = 4)
         self.logger.debug("Successfully saved list data to disk")
     
     @Saveable.affects_class_data("Adding member to list's included members")

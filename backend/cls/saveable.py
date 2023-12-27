@@ -1,15 +1,16 @@
 from backend.utils.logging import get_logger
 
 class Saveable:
-    def ___init__(self):
+    def __init__(self):
+        print(f"Initialized logger for class {type(self)}")
         self.logger = get_logger(type(self).__name__)
     
-    def affects_class_data(self,log_msg):
+    def affects_class_data(log_msg):
         def outer_wrapper(func):
-            def inner_wrapper(*args,**kwargs):
-                func(*args,**kwargs)
-                log_msg = f"Saving {type(self).__name__} {self.name} after operation:" + log_msg
-                self.logger.debug(log_msg)
+            def inner_wrapper(self,*args,**kwargs):
+                func(self,*args,**kwargs)
+                msg = f"Saving {type(self).__name__} {self.name} after operation:" + log_msg
+                self.logger.debug(msg)
                 self.save_data()
 
             return inner_wrapper
