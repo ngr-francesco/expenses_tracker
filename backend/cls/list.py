@@ -136,11 +136,15 @@ class List(Saveable):
 
             for key,value in data.items():
                 if key == 'members':
-                    for id in value:
-                        self.members[id] = Member(id)
+                    for id,member_dict in value.items():
+                        member = Member(id)
+                        member.set_data(member_dict)
+                        self.members[id] = member
+
                 elif key == 'items':
                     for id, item in value.items():
                         self.items[id] = ListItem(*item)
+                        
                 elif hasattr(self,key) and not key == 'members':
                     self.logger.diagnostic(f"Setting list attribute {key} = {value}")
                     setattr(self,key,value)
@@ -160,7 +164,7 @@ class List(Saveable):
             'name': self.name,
             'data_dir': self.data_dir,
             'id': self.id,
-            'members': {member.id for member in self.members},
+            'members': {member.id: member.list_summary() for member in self.members},
             'items': self.items
         }
         self.logger.diagnostic(json.dumps(dict_to_save,indent = 4))

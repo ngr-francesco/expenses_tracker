@@ -20,7 +20,7 @@ class Member(Saveable):
                  new_member = False):
         super().__init__()
         self.name = name
-        self.usr_id = None
+        self.user_id = None
         # If we're loading a member
         if id is not None:
             self.id = id
@@ -37,7 +37,7 @@ class Member(Saveable):
         self.save_data()
         
         if not new_member:
-            member_dict = self.load_from_members_file(name,id)
+            self.load_from_members_file(name,id)
             IdFactory.roll_back_id(self)
             
         # If a usr_id was given we connect this member to that user
@@ -50,13 +50,13 @@ class Member(Saveable):
             raise ValueError(f"Member {self.name} {self.id} is already connected to usr id {usr_id}. Cannot connect to new user.")
         if not is_uuid4(usr_id):
             raise ValueError(f"Given user id is not uuid4: {usr_id}")
-        self.usr_id = usr_id
+        self.user_id = usr_id
     
     def is_connected_to_usr_profile(self):
         """
         Check if this member is connected to an external user profile
         """
-        return self.usr_id is not None
+        return self.user_id is not None
     
     def load_from_members_file(self,name = '', id = None):
         file_path = os.path.join(default_data_dir,default_members_file)
@@ -76,6 +76,25 @@ class Member(Saveable):
                 setattr(self,key,value)
         else:
             self.logger.warning("Trying to load member data from non-existing file.")
+    
+    def set_data(self,data_dict):
+        """
+        Used to load data when initializing a list or a group. The data stored by these objects
+        will set the attributes of this particular instance of Member, without affecting its unique identifiers
+        (name, id, user_id)
+        """
+        id_check = all(x==y for x,y in [(self.name,data_dict['name']),
+                                            (self.id,data_dict['id']),
+                                            (self.user_id, data_dict['user_id'])])
+        if not id_check:
+            raise ValueError(f"Trying to set member data from unrecognized member." 
+                             f"Current member: {self.name}{self.id}. Given data: {data_dict['name']}{data_dict['id']}")
+        
+        for key,value in data_dict.items():
+            if hasattr(self,key):
+                setattr(self,key,value)
+            else:
+                self.logger.debug(f"Attribute {key} retrieved from data_dict is not in Member class attributes, ignoring it.")
     
     def is_settled(self):
         if not self._settled and self.partial_amount < EUROCENT:
@@ -128,7 +147,7 @@ class Member(Saveable):
         summary_dict = {
             'id' : self.id,
             'name' : self.name,
-            'user_id': self.usr_id
+            'user_id': self.user_id
         }
         return summary_dict
     
@@ -154,11 +173,17 @@ class Member(Saveable):
         })
         return summary_dict
     
+    def list_summary(self):
+        return self.balance_summary()
+    
+    def group_summary(self):
+        return self.balance_summary()
+    
     def __json__(self):
         return self.id
 
     def save_data(self):
-        member_dict = self.balance_summary()
+        member_dict = self.member_summary()
         file_path = os.path.join(default_data_dir,default_members_file)
         if os.path.exists(file_path):
             with open(file_path,'r') as file:
