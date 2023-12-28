@@ -37,3 +37,4 @@ yarn-error.*
 # python
 __pycache__
 usr_data/*
+transaction_records

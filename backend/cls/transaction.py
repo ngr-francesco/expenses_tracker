@@ -4,6 +4,7 @@ import json
 from backend.utils.ids import IdFactory
 from backend.utils.const import MSG, default_data_dir
 from backend.cls.saveable import Saveable
+from backend.utils.time import get_timestamp_numerical
 
 def get_transaction_info_from_id(transaction_id,path):
     if not os.path.exists(path):
@@ -37,7 +38,8 @@ class Transaction(Saveable):
             'sender': self.sender.id,
             'receiver': self.receiver.id,
             'amount': self.amount,
-            'direction': str(self.sent_received)
+            'direction': str(self.sent_received),
+            'time_created': self.time_created
         }
         return summary_dict
     

@@ -4,6 +4,7 @@ from backend.utils.ids import IdFactory
 from backend.cls.transaction import Transaction
 from backend.utils.ids import is_uuid4
 from backend.cls.saveable import Saveable
+from backend.utils.time import get_timestamp_numerical
 from backend.utils.const import default_data_dir
 import os, json
 
@@ -19,6 +20,7 @@ class Member(Saveable):
                  usr_id = None,
                  new_member = False):
         super().__init__()
+        # Id data
         self.name = name
         self.user_id = None
         # If we're loading a member
@@ -51,7 +53,7 @@ class Member(Saveable):
             self.connect_to_usr_profile(usr_id)
         self.save_data()
             
-    @Saveable.affects_class_data(log_msg="Connected member to user profile")
+    @Saveable.affects_metadata(log_msg="Connected member to user profile")
     def connect_to_usr_profile(self,usr_id):
         if usr_id is None:
             raise ValueError(f"Member {self.name} {self.id} is already connected to usr id {usr_id}. Cannot connect to new user.")
@@ -116,7 +118,7 @@ class Member(Saveable):
         self.init_amount = abs(self.balance)
         self.partial_amount = self.init_amount
     
-    @Saveable.affects_class_data(log_msg="Settled up member")
+    @Saveable.affects_metadata(log_msg="Settled up member")
     def finalize_settle_up(self):
         if not self.is_settled():
             raise ValueError(f"Member {self.name} is not settled, yet. Can't finalize settling up process.")
@@ -126,7 +128,7 @@ class Member(Saveable):
         self.spent_total -= self.balance
         del self.init_amount
 
-    @Saveable.affects_class_data(log_msg="Clearing transactions list")   
+    @Saveable.affects_metadata(log_msg="Clearing transactions list")   
     def clear_transactions(self):
         if not self.is_settled():
             self.logger.warning("You are clearing the transaction of a member which is not yet settled up."
@@ -134,7 +136,7 @@ class Member(Saveable):
         self.transactions = []
         self.logger.debug("Saving member data after clearing transactions")
     
-    @Saveable.affects_class_data(log_msg="Processing transaction to/from other member")
+    @Saveable.affects_metadata(log_msg="Processing transaction to/from other member")
     def process_transaction(self,person,amount):
         if self.is_settled():
             self.logger.warn("You are about to make a transaction with a settled up person. This is rarely the intended behavior.")
@@ -156,7 +158,8 @@ class Member(Saveable):
         summary_dict = {
             'id' : self.id,
             'name' : self.name,
-            'user_id': self.user_id
+            'user_id': self.user_id,
+            'time_created': self.time_created
         }
         return summary_dict
     

@@ -6,6 +6,7 @@ from backend.cls.member import Member
 from backend.cls.saveable import Saveable
 from backend.utils.ids import IdFactory
 from backend.utils.const import default_data_dir, EUROCENT
+from backend.utils.time import get_timestamp_numerical
 import numpy as np
 
 from enum import Enum
@@ -61,7 +62,8 @@ class ListItem():
             'id': self.id,
             'bought_by': self.bought_by.id,
             'members_involved': [m for m in self.members_involved],
-            'shares': [(m.name,self.shares[m_id]) for m_id,m in self.members_involved.items()]
+            'shares': [(m.name,self.shares[m_id]) for m_id,m in self.members_involved.items()],
+            'time_created': get_timestamp_numerical()
         }
         return summary_dict
     
@@ -69,31 +71,31 @@ class ListItem():
         printable_summary = json.dumps(self.summary(), indent=4)
         return printable_summary
 
+default_lists_dir = os.path.join(default_data_dir,'ungrouped_lists')
 
 class List(Saveable):
     def __init__(self,name:str, 
                  members: ty.List[ty.Union[str,Member]], 
-                 data_dir: str = default_data_dir, 
+                 data_dir: str = default_lists_dir, 
                  file_name: str = "list_info.json", 
+                 group_name: str = None,
                  load_from_file: bool = False, 
-                 load_file_path = '', 
+                 load_file_path = '',
                  cycle_length = None):
         super().__init__()
         self.name = name
         self.id = IdFactory.get_obj_id(self)
         if members:
-            print("Before",members)
             assert type(members) == list, "members argument to List must be a list"
             assert type(members[0]) == Member, "members list must contain Member objects"
-            print("After", members)
             self.members = {
                 m.id: m for m in members
             }
-            print(self.members)
 
         self.items = {}
         self.file_name = f'{self.id}_{file_name}'
         self.data_dir = os.path.join(data_dir , f'List_{self.id}')
+        self.group_name = group_name
         self.cycle_length = cycle_length
         # To make sure all the required attributes were set I first
         # set them, then if the list should be loaded from file, we load it.
@@ -102,20 +104,20 @@ class List(Saveable):
             if list_loaded:
                 IdFactory.roll_back_id(self)
 
-    @Saveable.affects_class_data(log_msg="Adding item to list")   
+    @Saveable.affects_metadata(log_msg="Adding item to list")   
     def add_item(self,item: ty.Union[dict,ListItem]):
         if not isinstance(item, ListItem):
             item = ListItem(*item)
         self.items[item.id] = item
     
-    @Saveable.affects_class_data(log_msg="Removing item from list")
+    @Saveable.affects_metadata(log_msg="Removing item from list")
     def remove_item(self,id):
         try:
             self.items.pop(id)
         except KeyError:
             self.logger.warning(f"Item not in list {id}")
     
-    @Saveable.affects_class_data(log_msg="Editing item in list")
+    @Saveable.affects_metadata(log_msg="Editing item in list")
     def edit_item(self,id,key,value):
         if type(value) != type(self.items[id][key]):
             raise ValueError(f"Existing key {key}:{self.items[id][key]} has different type than given key {value}")
@@ -187,7 +189,8 @@ class List(Saveable):
             'data_dir': self.data_dir,
             'id': self.id,
             'members': {member.id: member.list_summary() for member in self.members.values()},
-            'items': {item.id: item.summary() for item in self.items.values()}
+            'items': {item.id: item.summary() for item in self.items.values()},
+            'time_created': self.time_created,
         }
         self.logger.diagnostic(json.dumps(dict_to_save,indent = 4))
         file_path = os.path.join(self.data_dir,self.file_name)
@@ -195,7 +198,7 @@ class List(Saveable):
             json.dump(dict_to_save, file, indent = 4)
         self.logger.debug("Successfully saved list data to disk")
     
-    @Saveable.affects_class_data("Adding member to list's included members")
+    @Saveable.affects_metadata("Adding member to list's included members")
     def add_member(self,member):
         # If an Id to be loaded from files is given, it will be a string
         if isinstance(member, str):

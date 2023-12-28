@@ -5,6 +5,7 @@ from list import List
 
 from backend.utils.ids import IdFactory
 from backend.utils.const import default_data_dir
+from backend.utils.time import get_timestamp_numerical
 from backend.cls.saveable import Saveable
 
 
@@ -30,7 +31,7 @@ class Group(Saveable):
                 IdFactory.roll_back_id()
 
 
-    @Saveable.affects_class_data(log_msg= "Added new member")
+    @Saveable.affects_metadata(log_msg= "Added new member")
     def add_member(self,member = None,name = '', id = None):
         if not member:
             if name: 
@@ -40,17 +41,17 @@ class Group(Saveable):
             else:
                 raise ValueError("No information regarding the member to be added was given.")
         self.members[member.id] = member
-    @Saveable.affects_class_data(log_msg="Removed member")
+    @Saveable.affects_metadata(log_msg="Removed member")
     def remove_member(self,member = None, id = None):
         if id is None:
             id = member.id
         self.members.pop(id)
     
-    @Saveable.affects_class_data(log_msg="Addded new list")
+    @Saveable.affects_metadata(log_msg="Addded new list")
     def add_list(self,list):
         self.lists[list.id] = list
     
-    @Saveable.affects_class_data(log_msg="Removed list")
+    @Saveable.affects_metadata(log_msg="Removed list")
     def remove_list(self,list = None, id = None):
         if id is None:
             id = list.id
@@ -61,6 +62,7 @@ class Group(Saveable):
             'name': self.name,
             'id' : self.id,
             'data_dir': self.data_dir,
+            'time_created': self.time_created,
             'lists' : {
                 l.id : os.path.join(l.data_dir,l.file_name) for l in self.lists
             },
