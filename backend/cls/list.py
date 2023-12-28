@@ -1,13 +1,12 @@
 from backend.utils.logging import get_logger
-import os, json, shutil
+import os, json
 import typing as ty
 
-from backend.cls.member import Member
+from backend.cls.member import Member, MembersList
 from backend.cls.saveable import Saveable
-from backend.utils.ids import IdFactory
 from backend.utils.const import default_data_dir, EUROCENT
 from backend.utils.time import get_timestamp_numerical
-import numpy as np
+from backend.cls.object_with_id import ObjectWithId
 
 from enum import Enum
 
@@ -19,11 +18,11 @@ class SharingMethods(Enum):
     AMOUNTS = 0
 
 
-class ListItem():
-    def __init__(self,name,bought_by,amount = 0,members_involved = {}, sharing_method = SharingMethods.EQUAL, percentages = {}, amounts = {}, **kwargs):
+class ListItem(ObjectWithId):
+    def __init__(self,name,bought_by,amount = 0,members_involved = MembersList(), sharing_method = SharingMethods.EQUAL, percentages = {}, amounts = {}, **kwargs):
+        super().__init__()
         self.logger = get_logger(type(self).__name__)
         self.name = name
-        self.id = IdFactory.get_obj_id(self)
         self.bought_by = bought_by
         self.amount = amount
         self.members_involved = members_involved
@@ -33,7 +32,7 @@ class ListItem():
         shares = {}
 
         if sharing_method == SharingMethods.EQUAL:
-            shares = {m : self.amount/len(self.members_involved) for m in self.members_involved}
+            shares = {m.id : self.amount/len(self.members_involved) for m in self.members_involved}
 
         elif sharing_method == SharingMethods.PERCENTAGES:
             if not sum(list(percentages.values())) - 1 < PERCENTAGE_MAX_ERROR:
@@ -61,8 +60,8 @@ class ListItem():
             'name': self.name,
             'id': self.id,
             'bought_by': self.bought_by.id,
-            'members_involved': [m for m in self.members_involved],
-            'shares': [(m.name,self.shares[m_id]) for m_id,m in self.members_involved.items()],
+            'members_involved': [m.id for m in self.members_involved],
+            'shares': [(m.name,self.shares[m.id]) for m in self.members_involved],
             'time_created': get_timestamp_numerical()
         }
         return summary_dict
@@ -84,13 +83,8 @@ class List(Saveable):
                  cycle_length = None):
         super().__init__()
         self.name = name
-        self.id = IdFactory.get_obj_id(self)
-        if members:
-            assert type(members) == list, "members argument to List must be a list"
-            assert type(members[0]) == Member, "members list must contain Member objects"
-            self.members = {
-                m.id: m for m in members
-            }
+        
+        self.members = MembersList(members)
 
         self.items = {}
         self.file_name = f'{self.id}_{file_name}'
@@ -101,9 +95,7 @@ class List(Saveable):
         # set them, then if the list should be loaded from file, we load it.
         if load_from_file:
             list_loaded = self.load(load_file_path)
-            if list_loaded:
-                IdFactory.roll_back_id(self)
-
+        
     @Saveable.affects_metadata(log_msg="Adding item to list")   
     def add_item(self,item: ty.Union[dict,ListItem]):
         if not isinstance(item, ListItem):
@@ -131,7 +123,7 @@ class List(Saveable):
                 except:
                     pass
     
-    def load(self,file_path):
+    def load(self,file_path = ''):
         if file_path == '':
             file_path = os.path.join(self.data_dir,self.file_name)
         if os.path.exists(file_path):
@@ -140,10 +132,7 @@ class List(Saveable):
 
             for key,value in data.items():
                 if key == 'members':
-                    for id,member_dict in value.items():
-                        member = Member(id)
-                        member.set_data(member_dict)
-                        self.members[id] = member
+                    self.members.load_members_from_dict(value)
 
                 elif key == 'items':
                     for id, item in value.items():
@@ -171,11 +160,11 @@ class List(Saveable):
         """
 
         buyer_id = item_dict['bought_by']
-        item_dict['bought_by'] = self.members[buyer_id]
+        item_dict['bought_by'] = self.members.get_by_id(buyer_id)
 
         members_involved = item_dict['members_involved']
         item_dict['members_involved'] = {
-            m_id: self.members[m_id] for m_id in members_involved
+            m_id: self.members.get_by_id(m_id) for m_id in members_involved
         }
 
         return item_dict
@@ -188,9 +177,10 @@ class List(Saveable):
             'name': self.name,
             'data_dir': self.data_dir,
             'id': self.id,
-            'members': {member.id: member.list_summary() for member in self.members.values()},
-            'items': {item.id: item.summary() for item in self.items.values()},
             'time_created': self.time_created,
+            'members': self.members.summary(),
+            'items': {item.id: item.summary() for item in self.items.values()},
+            
         }
         self.logger.diagnostic(json.dumps(dict_to_save,indent = 4))
         file_path = os.path.join(self.data_dir,self.file_name)
@@ -203,9 +193,9 @@ class List(Saveable):
         # If an Id to be loaded from files is given, it will be a string
         if isinstance(member, str):
             member = Member(member)
-        if member.id in self.members:
+        if member.id in self.members.ids:
             raise ValueError(f"The member you're trying to add is already in this List {member.name}")
-        self.members[member.id] = member
+        self.members.add_member(member)
 
         
     

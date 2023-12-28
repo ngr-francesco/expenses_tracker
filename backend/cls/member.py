@@ -1,14 +1,101 @@
 from backend.utils.const import EUROCENT, STATUS, MSG
 from backend.utils.logging import get_logger
-from backend.utils.ids import IdFactory
 from backend.cls.transaction import Transaction
 from backend.utils.ids import is_uuid4
 from backend.cls.saveable import Saveable
-from backend.utils.time import get_timestamp_numerical
+from backend.utils.decorators import requires_reload
 from backend.utils.const import default_data_dir
 import os, json
 
 default_members_file = 'all_members.json'
+
+class MembersList:
+    def __init__(self, members = None):
+        self.logger = get_logger(type(self).__name__)
+        self.members_by_id = {}
+        self.members_by_name = {}
+        self.index = 0
+        if members:
+            assert isinstance(members,(list,MembersList)), "members argument to List must be a list or MembersList"
+            assert type(members[0]) == Member, "members list must contain Member objects"
+            for member in members:
+                self.add_member(member)
+            
+    @property
+    def ids(self):
+        return [id for id in self.members_by_id]
+    @property
+    def names(self):
+        return [name for name in self.members_by_name]
+
+    def get_by_name(self, name):
+        return self.members_by_name[name]
+
+    def get_by_id(self, id):
+        return self.members_by_id[id]
+    
+    def get(self,name_or_id):
+        """
+        Generalized get function with a bit of overhead.
+        """
+        if name_or_id in self.members_by_id and name_or_id in self.members_by_name:
+            raise ValueError(f"Something is wrong, given name or id is in both by_id and by_name dictionaries {name_or_id}.")
+        if name_or_id in self.members_by_id:
+            return self.get_by_id(name_or_id)
+        if name_or_id in self.members_by_name:
+            return self.get_by_name(name_or_id)
+
+    def summary(self):
+        return {member.id : member.extended_summary() for member in self}
+
+    def load_from_file(self, file_path):
+        pass
+
+    def add_member(self, member):
+        if member in self:
+            self.logger.warning(f"Member already in MemberList {member.name}{member.id}")
+            return
+        self.members_by_id[member.id] = member
+        self.members_by_name[member.name] = member
+    
+    def add_member_from_dict(self,m_dict):
+        member = Member(m_dict["id"])
+        member.set_data(m_dict)
+        self.add_member(member)
+    
+    def load_members_from_dict(self, data_dict):
+        for m_dict in data_dict.values():
+            self.add_member_from_dict(m_dict)
+
+    def remove_member(self,member):
+        if isinstance(member,str):
+            member = self.get(member)
+        if not member in self:
+            self.logger.warning(f"Member not in MemberList {member.name}{member.id}")
+            return
+        self.members_by_id.pop(member.id)
+        self.members_by_name.pop(member.name)
+    
+    # Dunder overloads
+    
+    def __contains__(self,member):
+        return member.id in self.members_by_id and member.name in self.members_by_name
+    
+    def __iter__(self):
+        self.index = 0
+        return self
+    
+    def __next__(self):
+        if self.index < len(self.members_by_id):
+            next_item = list(self.members_by_id.values())[self.index]
+            self.index += 1
+            return next_item
+        else:
+            raise StopIteration
+    
+    def __len__(self):
+        return len(self.members_by_id)
+
 
 class Member(Saveable):
     def __init__(self,name = '',
@@ -23,12 +110,6 @@ class Member(Saveable):
         # Id data
         self.name = name
         self.user_id = None
-        # If we're loading a member
-        if id is not None:
-            self.id = id
-        # If we're initializing a new member
-        else:
-            self.id = IdFactory.get_obj_id(self)
         # Member data used by lists and groups
         self._settled = False
         self.status = status
@@ -44,9 +125,7 @@ class Member(Saveable):
         
         
         if not new_member:
-            loaded_member = self.load_from_members_file(name,id)
-            if loaded_member:
-                IdFactory.roll_back_id(self)
+            loaded_member = self.load(name,id)
             
         # If a usr_id was given we connect this member to that user
         if usr_id:
@@ -67,9 +146,13 @@ class Member(Saveable):
         """
         return self.user_id is not None
     
-    def load_from_members_file(self,name = '', id = None):
+    def load(self,name = '', id = None):
         file_path = os.path.join(default_data_dir,default_members_file)
         member_dict = {}
+        # When reloading this is the case
+        if not name and not id and len(self.name):
+            name = self.name
+
         if os.path.exists(file_path):
             with open(os.path.join(default_data_dir,default_members_file),'r') as file:
                 data = json.load(file)
@@ -155,6 +238,10 @@ class Member(Saveable):
         self.transactions.append(transaction)
 
     def member_summary(self):
+        """
+        Only member summary contains the member name. Since this can be
+        changed by the user, we don't want to rely on it too much.
+        """
         summary_dict = {
             'id' : self.id,
             'name' : self.name,
@@ -164,28 +251,28 @@ class Member(Saveable):
         return summary_dict
     
     def transaction_summary(self):
-        summary_dict = self.member_summary()
-        summary_dict.update({
+        summary_dict = {
+            'id': self.id,
             'status': str(self.status),
             "balance": self.balance,
             'transactions': [str(trans) for trans in self.transactions], 
             'settled': self.is_settled(),
-        })
+        }
         return summary_dict
     
     def balance_summary(self):
-        summary_dict = self.member_summary()
-        summary_dict.update({
+        summary_dict = {
+            'id': self.id,
             'status': str(self.status),
             "balance": self.balance,
             '_settled': self.is_settled(),
             "spent_total": self.spent_total,
             "days_spent": self.days_spent,
             
-        })
+        }
         return summary_dict
     
-    def list_summary(self):
+    def extended_summary(self):
         return self.balance_summary()
     
     def group_summary(self):
@@ -193,6 +280,26 @@ class Member(Saveable):
     
     def __json__(self):
         return self.id
+    
+    @Saveable.affects_metadata(log_msg="Renamed member.")
+    @requires_reload
+    def rename(self,new_name: str):
+        file_path = os.path.join(default_data_dir,default_members_file)
+        # We need to remove the old entry in the all_members file
+        if os.path.exists(file_path):
+            with open(file_path,'r') as file:
+                data_dict = json.load(file)
+            # Check for name clashes
+            if new_name in data_dict['members_from_name']:
+                self.logger.warning("Name would clash with pre-existing member name. Aborting...")
+                return -1
+            if self.id in data_dict['members_from_id'] and self.name in data_dict['members_from_name']:
+                data_dict["members_from_id"].pop(self.id)
+                data_dict['members_from_name'].pop(self.name)
+        self.name = new_name
+        return 0
+
+
 
     def save_data(self):
         member_dict = self.member_summary()

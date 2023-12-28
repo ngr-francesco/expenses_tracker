@@ -1,11 +1,9 @@
-from member import Member
+from member import Member, MembersList
 import os
 import json
 from list import List
 
-from backend.utils.ids import IdFactory
 from backend.utils.const import default_data_dir
-from backend.utils.time import get_timestamp_numerical
 from backend.cls.saveable import Saveable
 
 
@@ -14,21 +12,14 @@ class Group(Saveable):
     def __init__(self,name,members = None, data_dir = default_data_dir, load_from_file = False, load_file_path = ''):
         super().__init__()
         self.name = name
-        self.id = IdFactory.get_obj_id(self)
         self.data_dir = data_dir + 'Group_' + self.id
-        if members:
-            assert type(members) == list, "members argument to Group must be a list"
-            assert type(members[0]) == Member, "members list must contain Member objects"
-            self.members = {
-                m.id: m for m in members
-            }
+        self.file_name = f'{self.id}_group_info.json'
+        self.members = MembersList(members)
         self.lists = {}
         self.save_data()
 
         if load_from_file:
-            group_loaded = self.load_from_file(load_file_path)
-            if group_loaded:
-                IdFactory.roll_back_id()
+            group_loaded = self.load(load_file_path)
 
 
     @Saveable.affects_metadata(log_msg= "Added new member")
@@ -40,12 +31,13 @@ class Group(Saveable):
                 member = Member(id)
             else:
                 raise ValueError("No information regarding the member to be added was given.")
-        self.members[member.id] = member
+        self.members.add_member(member)
+
     @Saveable.affects_metadata(log_msg="Removed member")
     def remove_member(self,member = None, id = None):
         if id is None:
             id = member.id
-        self.members.pop(id)
+        self.members.remove_member(id)
     
     @Saveable.affects_metadata(log_msg="Addded new list")
     def add_list(self,list):
@@ -75,10 +67,14 @@ class Group(Saveable):
     def save_data(self):
         if not os.path.exists(self.data_dir):
             os.makedirs(self.data_dir)
-        with open(os.path.join(self.data_dir,f'{self.id}_group_info.json'),'w+') as file:
+        with open(os.path.join(self.data_dir,self.file_name),'w+') as file:
             json.dump(self.summary(),file, indent = 4)
     
-    def load_from_file(self, path):
+    def load(self, path= None):
+        # It's the case when reloading the backend
+        if not path:
+            path = os.path.join(self.data_dir, self.file_name)
+
         if not os.path.exists(path):
             self.logger.warning(f"Cannot read file from inexistent path {path}")
             return False

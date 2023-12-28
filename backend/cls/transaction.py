@@ -1,9 +1,8 @@
 import os
 import json
 
-from backend.utils.ids import IdFactory
+from backend.cls.object_with_id import ObjectWithId
 from backend.utils.const import MSG, default_data_dir
-from backend.cls.saveable import Saveable
 from backend.utils.time import get_timestamp_numerical
 
 def get_transaction_info_from_id(transaction_id,path):
@@ -15,14 +14,13 @@ def get_transaction_info_from_id(transaction_id,path):
     return data[transaction_id]
 
 
-class Transaction(Saveable):
+class Transaction(ObjectWithId):
     def __init__(self, sender, receiver, amount, sent_received, data_dir = os.path.join(default_data_dir,'transactions.json')):
         super().__init__()
         self.sender = sender
         self.receiver = receiver
         self.amount = amount
         self.sent_received = sent_received
-        self.id = IdFactory.get_obj_id(self)
         self.msgs = {
             MSG.SENT : f"{self.sender.name} (id: {self.sender.id}) sent {self.amount} to {self.receiver} (id: {self.receiver.id})",
             MSG.RECEIVED : f"{self.receiver} (id: {self.receiver.id}) received {self.amount} from {self.sender} (id: {self.sender.id})"
@@ -39,7 +37,7 @@ class Transaction(Saveable):
             'receiver': self.receiver.id,
             'amount': self.amount,
             'direction': str(self.sent_received),
-            'time_created': self.time_created
+            'time_created': get_timestamp_numerical()
         }
         return summary_dict
     
@@ -58,3 +56,4 @@ class Transaction(Saveable):
         transactions[self.id]= self.summary()
         with open(file_path,'w+') as file:
             json.dump(transactions, file, indent = 4)
+    

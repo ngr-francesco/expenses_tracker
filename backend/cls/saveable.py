@@ -1,14 +1,19 @@
 from backend.utils.logging import get_logger
-from backend.utils.time import get_timestamp_numerical
+from backend.utils.time import get_timestamp_numerical, is_valid_timestamp
+from backend.cls.object_with_id import ObjectWithId
+from weakref import WeakSet
 
 class Version:
     def __init__(self,state):
         self.state = state
         self.timestamp = get_timestamp_numerical()
 
-class Saveable:
+class Saveable(ObjectWithId):
+    # We track Saveable instances to allow save_all functionality
+    _instances = WeakSet()
     def __init__(self):
-        print(f"Initialized logger for class {type(self)}")
+        super().__init__()
+        Saveable._instances.add(self)
         self._logger = get_logger(type(self).__name__)
         self._time_created = get_timestamp_numerical()
         self._version_history = [Version(self._capture_state())]
@@ -20,6 +25,12 @@ class Saveable:
     @property
     def time_created(self):
         return self._time_created
+    @time_created.setter
+    def time_created(self,timestamp):
+        if not is_valid_timestamp(timestamp):
+            raise ValueError(f"Incompatible value for timestamp {timestamp}.")
+        self._time_created = timestamp
+    
     
     def affects_metadata(log_msg):
         def outer_wrapper(func):
@@ -66,7 +77,7 @@ class Saveable:
         self._restore_state(version.state)
     
     def _capture_state(self):
-        return {key:attr for key,attr in vars(self) if not key.startswith('_')}
+        return {key:attr for key,attr in vars(self).items() if not key.startswith('_')}
 
     def _restore_state(self,state):
         for key,attr in state.items():
@@ -74,4 +85,7 @@ class Saveable:
 
     def save_data(self):
         raise NotImplementedError("method 'save_data' must be implemented in children of Saveable class")
+    
+    def load(self):
+        raise NotImplementedError("method 'load' must be implemented in children of Saveable.")
             
