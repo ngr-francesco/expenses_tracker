@@ -58,6 +58,7 @@ class IdFactory:
         """
         try:
             id = IdFactory.next_ids[type(obj).__name__]
+            assert int(id[2:]) == int(previous_id[2:]) + 1, "Id cannot be rolled back, this is a bug" 
             IdFactory.next_ids[type(obj).__name__] = str(previous_id)
             IdFactory._save_ids()
         except KeyError:
