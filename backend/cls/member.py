@@ -59,7 +59,7 @@ class MembersList:
         self.members_by_name[member.name] = member
     
     def add_member_from_dict(self,m_dict):
-        member = Member(m_dict["id"])
+        member = Member(id = m_dict["id"])
         member.set_data(m_dict)
         self.add_member(member)
     
@@ -98,7 +98,8 @@ class MembersList:
 
 
 class Member(Saveable):
-    def __init__(self,name = '',
+    def __init__(self,
+                 name = '',
                  balance = 0,
                  status = None, 
                  spent_total = 0, 
@@ -177,12 +178,11 @@ class Member(Saveable):
         will set the attributes of this particular instance of Member, without affecting its unique identifiers
         (name, id, user_id)
         """
-        id_check = all(x==y for x,y in [(self.name,data_dict['name']),
-                                            (self.id,data_dict['id']),
-                                            (self.user_id, data_dict['user_id'])])
+        print(data_dict)
+        id_check = self.id == data_dict['id']
         if not id_check:
             raise ValueError(f"Trying to set member data from unrecognized member." 
-                             f"Current member: {self.name}{self.id}. Given data: {data_dict['name']}{data_dict['id']}")
+                             f"Current member: {self.name}_{self.id}. Given data: {data_dict['id']}")
         
         for key,value in data_dict.items():
             if hasattr(self,key):
@@ -284,6 +284,7 @@ class Member(Saveable):
     @Saveable.affects_metadata(log_msg="Renamed member.")
     @requires_reload
     def rename(self,new_name: str):
+        print("Renaming member")
         file_path = os.path.join(default_data_dir,default_members_file)
         # We need to remove the old entry in the all_members file
         if os.path.exists(file_path):
@@ -307,12 +308,13 @@ class Member(Saveable):
         if os.path.exists(file_path):
             with open(file_path,'r') as file:
                 data_dict = json.load(file)
-
+            print(json.dumps(data_dict,indent=4))
             if self.id in data_dict['members_from_id'] and data_dict['members_from_id'][self.id]['name'] != self.name:
                 raise Exception("Two members share the same id, this is a bug.")
             
             data_dict['members_from_id'][self.id] = member_dict
             data_dict['members_from_name'][self.name] = member_dict
+            print(json.dumps(data_dict,indent = 4))
         else:
             data_dict = {
                 'members_from_id': {self.id: member_dict},

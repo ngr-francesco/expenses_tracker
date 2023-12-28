@@ -73,8 +73,8 @@ class ListItem(ObjectWithId):
 default_lists_dir = os.path.join(default_data_dir,'ungrouped_lists')
 
 class List(Saveable):
-    def __init__(self,name:str, 
-                 members: ty.List[ty.Union[str,Member]], 
+    def __init__(self,name:str = '', 
+                 members: ty.List[ty.Union[str,Member]] = [], 
                  data_dir: str = default_lists_dir, 
                  file_name: str = "list_info.json", 
                  group_name: str = None,
