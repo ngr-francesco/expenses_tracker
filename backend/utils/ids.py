@@ -28,8 +28,6 @@ id_types = {
     'tr' : IdTypes.TRANSACTION 
 }
 
-
-
 class IdFactory:
     file_path = os.path.join(default_data_dir,'id_factory','ids.json')
     try:
@@ -76,7 +74,6 @@ class IdFactory:
     def _save_ids():
         with open(IdFactory.file_path,'w+') as file:
             json.dump(IdFactory.next_ids, file, indent = 4)
-
 
 
 def is_uuid4(id:str):

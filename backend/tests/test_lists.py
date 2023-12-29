@@ -10,7 +10,6 @@ def init_basic_list():
     l = List("test",[m for m in mems])
     return l
 
-
 def test_list_init():
     l = init_basic_list()
     i = ListItem('test_i',l.members.get_by_name('A'),amount = 10,members_involved=l.members)
@@ -24,8 +23,8 @@ def test_list_load():
     file_name = l.file_name
     del l
     l2 = List(load_from_file=True,load_file_path=os.path.join(dir,file_name))
-    print(l2.members)
     assert len(l2.members) == 2
+
 
 
 

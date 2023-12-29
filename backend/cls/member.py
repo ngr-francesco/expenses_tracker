@@ -1,19 +1,23 @@
-from backend.utils.const import EUROCENT, STATUS, MSG
+from backend.utils.const import EUROCENT, STATUS, MSG, default_data_dir
 from backend.utils.logging import get_logger
 from backend.cls.transaction import Transaction
 from backend.utils.ids import is_uuid4
 from backend.cls.saveable import Saveable
 from backend.utils.decorators import requires_reload
-from backend.utils.const import default_data_dir
+from backend.utils.time import get_timestamp_numerical
+from backend.utils.utils import SharingWeight
+from backend.cls.list import List
 import os, json
 
 default_members_file = 'all_members.json'
 
 class MembersList:
-    def __init__(self, members = None):
+    def __init__(self, owner: Saveable, members = None):
         self.logger = get_logger(type(self).__name__)
         self.members_by_id = {}
         self.members_by_name = {}
+        self.data_dir = os.path.join(owner.data_dir,'balance_summaries')
+        self.summary_type = 'list_summary' if isinstance(owner,List) else 'extended_summary'
         self.index = 0
         if members:
             assert isinstance(members,(list,MembersList)), "members argument to List must be a list or MembersList"
@@ -46,10 +50,7 @@ class MembersList:
             return self.get_by_name(name_or_id)
 
     def summary(self):
-        return {member.id : member.extended_summary() for member in self}
-
-    def load_from_file(self, file_path):
-        pass
+        return {member.id : getattr(member,self.summary_type)() for member in self}
 
     def add_member(self, member):
         if member in self:
@@ -75,6 +76,18 @@ class MembersList:
             return
         self.members_by_id.pop(member.id)
         self.members_by_name.pop(member.name)
+    
+    def balance_report(self, save_to_file = False):
+        bal_report = {
+            m.name : m.balance_summary() for m in self.members_by_name
+        }
+        if save_to_file:
+            if not os.path.exists(self.data_dir):
+                os.makedirs(self.data_dir)
+            file_name = f'balance_summary_{get_timestamp_numerical()}.json'
+            with open(os.path.join(self.data_dir,file_name),'w+') as file:
+                json.dump(bal_report, file, indent = 4)
+        return bal_report
     
     # Dunder overloads
     
@@ -103,7 +116,7 @@ class Member(Saveable):
                  balance = 0,
                  status = None, 
                  spent_total = 0, 
-                 days_spent = 0, 
+                 sharing_weights = None, 
                  id = None,
                  usr_id = None,
                  new_member = False):
@@ -116,7 +129,7 @@ class Member(Saveable):
         self.status = status
         self.balance = balance
         self.spent_total = spent_total
-        self.days_spent = days_spent
+        self.sharing_weights = sharing_weights if sharing_weights else [SharingWeight('weight')]
         self.transactions = []
         # Quantities required to calculate balances
         self.partial_amount = 0
@@ -132,7 +145,15 @@ class Member(Saveable):
         if usr_id:
             self.connect_to_usr_profile(usr_id)
         self.save_data()
-            
+
+    @Saveable.affects_metadata(log_msg="Changed member balance")
+    def add_to_balance(self,amount):
+        self.balance += amount
+
+    @Saveable.affects_metadata(log_msg="Changed member spent total")
+    def add_to_spent_total(self,amount):
+        self.spent_total += amount
+
     @Saveable.affects_metadata(log_msg="Connected member to user profile")
     def connect_to_usr_profile(self,usr_id):
         if usr_id is None:
@@ -185,6 +206,8 @@ class Member(Saveable):
                              f"Current member: {self.name}_{self.id}. Given data: {data_dict['id']}")
         
         for key,value in data_dict.items():
+            if key == 'sharing_weights':
+                value = [SharingWeight(*v) for v in value]
             if hasattr(self,key):
                 setattr(self,key,value)
             else:
@@ -261,22 +284,27 @@ class Member(Saveable):
         return summary_dict
     
     def balance_summary(self):
+        # This is only saved within 
         summary_dict = {
             'id': self.id,
             'status': str(self.status),
             "balance": self.balance,
             '_settled': self.is_settled(),
             "spent_total": self.spent_total,
-            "days_spent": self.days_spent,
-            
         }
         return summary_dict
     
     def extended_summary(self):
         return self.balance_summary()
     
-    def group_summary(self):
-        return self.balance_summary()
+    def list_summary(self):
+        """
+        Within lists we can have different sharing weights to be used to calculate
+        list-item shares. These should not be imported from groups, since they're not needed.
+        """
+        summary_dict = self.balance_summary()
+        summary_dict['sharing_weights'] = [weight.tuple() for weight in self.sharing_weights]
+        return summary_dict
     
     def __json__(self):
         return self.id

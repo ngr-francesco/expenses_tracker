@@ -14,21 +14,33 @@ PERCENTAGE_MAX_ERROR = 0.01
 
 class SharingMethods(Enum):
     EQUAL = 0
-    PERCENTAGES = 0
-    AMOUNTS = 0
+    PERCENTAGES = 1
+    AMOUNTS = 2
+    WEIGHTED = 3
 
 
 class ListItem(ObjectWithId):
-    def __init__(self,name,bought_by,amount = 0,members_involved = MembersList(), sharing_method = SharingMethods.EQUAL, percentages = {}, amounts = {}, **kwargs):
+    def __init__(self,
+                 name,
+                 bought_by,
+                 amount = 0,
+                 members_involved = MembersList(), 
+                 sharing_method = SharingMethods.EQUAL, 
+                 percentages = {}, 
+                 amounts = {}, 
+                 sharing_weight_name = '',
+                 **kwargs):
+        
         super().__init__()
         self.logger = get_logger(type(self).__name__)
         self.name = name
         self.bought_by = bought_by
         self.amount = amount
         self.members_involved = members_involved
-        self.shares = self.calculate_shares(sharing_method, percentages, amounts)
+        self.shares = self.calculate_shares(sharing_method, percentages, amounts, sharing_weight_name)
+        self.update_member_balances()
 
-    def calculate_shares(self,sharing_method, percentages = {}, amounts = {}):
+    def calculate_shares(self,sharing_method, percentages = {}, amounts = {}, sharing_weight_name = ''):
         shares = {}
 
         if sharing_method == SharingMethods.EQUAL:
@@ -52,8 +64,40 @@ class ListItem(ObjectWithId):
                                  f"members: {self.members_involved.keys()}, percentages: {amounts.keys()}")
             
             shares = {m : a for m,a in amounts.items()}
+        
+        elif sharing_method == SharingMethods.WEIGHTED:
+            if not all([hasattr(m,'sharing_weight') for m in self.members_involved]):
+                raise ValueError("Members don't have a weight for this sharing method. Make sure you defined a"
+                                 "sharing weight in your members before using this method.")
+            if all([m.sharing_weights[sharing_weight_name].value == 0 for m in self.members_involved]):
+                self.logger.warning("All members have weights = 0, will forcefully set all weights to 1 "
+                                    "to avoid ZeroDivisionError")
+                for m in self.members_involved:
+                    m.sharing_weights[sharing_weight_name].value = 1
+
+            weights = [m.sharing_weights[sharing_weight_name].value for m in self.members_involved]
+            share_per_unit_weight = self.amount / sum(weights)
+            shares = {m.id : share_per_unit_weight*weights[i] for i,m in enumerate(self.members_involved) }
 
         return shares
+    
+    def update_member_balances(self):
+        # We user member methods because these changes require
+        # saving data (with the policy of automatic saving in place)
+        self.bought_by.add_to_spent_total(self.amount)
+        self.bought_by.add_to_balance(self.amount)
+        for m in self.members_involved:
+            m.balance.add_to_balance(-self.shares[m.id])
+    
+    def edit_field(self,field,value):
+        if hasattr(self,field):
+            if field == 'members_involved':
+                self.add_member(value)
+                return
+            setattr(self,field,value)
+    
+    def add_member(self,member):
+        self.members_involved.add_member(member)
     
     def summary(self):
         summary_dict = {
@@ -113,15 +157,7 @@ class List(Saveable):
     def edit_item(self,id,key,value):
         if type(value) != type(self.items[id][key]):
             raise ValueError(f"Existing key {key}:{self.items[id][key]} has different type than given key {value}")
-        self.items[id][key] = value
-    
-    def total_spent_per_member(self):
-        for item in self.list.items:
-            for m in self.members:
-                try:
-                    pass
-                except:
-                    pass
+        self.items[id].edit_field(key,value)
     
     def load(self,file_path = ''):
         if file_path == '':
@@ -187,6 +223,15 @@ class List(Saveable):
         with open(file_path, 'w+') as file:
             json.dump(dict_to_save, file, indent = 4)
         self.logger.debug("Successfully saved list data to disk")
+    
+    def sort_items_descending(self):
+        sorted_dict = dict(sorted(self.items.items(), key = lambda item: item[0], reverse=True))
+        return sorted_dict
+    
+    def sort_items_ascending(self):
+        sorted_dict = dict(sorted(self.items.items(), key = lambda item: item[0]))
+        return sorted_dict
+
     
     @Saveable.affects_metadata("Adding member to list's included members")
     def add_member(self,member):
