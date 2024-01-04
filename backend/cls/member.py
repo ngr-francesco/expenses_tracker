@@ -5,19 +5,26 @@ from backend.utils.ids import is_uuid4
 from backend.cls.saveable import Saveable
 from backend.utils.decorators import requires_reload
 from backend.utils.time import get_timestamp_numerical
-from backend.utils.utils import SharingWeight
-from backend.cls.list import List
 import os, json
 
 default_members_file = 'all_members.json'
 
+class SharingWeight:
+    def __init__(self,name, value = 1):
+        self.name = name
+        self.value = value
+    
+    def tuple(self):
+        return (self.name,self.value)
+
 class MembersList:
-    def __init__(self, owner: Saveable, members = None):
+    def __init__(self, owner, members = None):
         self.logger = get_logger(type(self).__name__)
         self.members_by_id = {}
         self.members_by_name = {}
-        self.data_dir = os.path.join(owner.data_dir,'balance_summaries')
-        self.summary_type = 'list_summary' if isinstance(owner,List) else 'extended_summary'
+        # Reports are only useful for groups and lists, not for lower level classes
+        self.reports_dir = os.path.join(owner.data_dir,'balance_summaries') if hasattr(owner,'data_dir') else None
+        self.summary_type = 'list_summary' if type(owner).__name__ =='List' else 'extended_summary'
         self.index = 0
         if members:
             assert isinstance(members,(list,MembersList)), "members argument to List must be a list or MembersList"
@@ -78,14 +85,18 @@ class MembersList:
         self.members_by_name.pop(member.name)
     
     def balance_report(self, save_to_file = False):
+        if self.reports_dir is None:
+            self.logger.warning("Saving reports is not supported for this instance of MembersList.")
+            return
+
         bal_report = {
             m.name : m.balance_summary() for m in self.members_by_name
         }
         if save_to_file:
-            if not os.path.exists(self.data_dir):
-                os.makedirs(self.data_dir)
+            if not os.path.exists(self.reports_dir):
+                os.makedirs(self.reports_dir)
             file_name = f'balance_summary_{get_timestamp_numerical()}.json'
-            with open(os.path.join(self.data_dir,file_name),'w+') as file:
+            with open(os.path.join(self.reports_dir,file_name),'w+') as file:
                 json.dump(bal_report, file, indent = 4)
         return bal_report
     
@@ -111,6 +122,8 @@ class MembersList:
 
 
 class Member(Saveable):
+    
+    @Saveable.takes_class_snapshot
     def __init__(self,
                  name = '',
                  balance = 0,
@@ -192,14 +205,14 @@ class Member(Saveable):
         else:
             self.logger.warning("Trying to load member data from non-existing file.")
             return False
-    
+        
+    @Saveable.takes_class_snapshot
     def set_data(self,data_dict):
         """
         Used to load data when initializing a list or a group. The data stored by these objects
         will set the attributes of this particular instance of Member, without affecting its unique identifiers
         (name, id, user_id)
         """
-        print(data_dict)
         id_check = self.id == data_dict['id']
         if not id_check:
             raise ValueError(f"Trying to set member data from unrecognized member." 
@@ -219,12 +232,12 @@ class Member(Saveable):
             self.partial_amount = 0
         return self._settled
     
+    @Saveable.affects_metadata(log_msg="Settled up member")
     def begin_settle_up(self):
         self.logger.debug(f"Preparing to settle up {self.name}, balance = {self.balance}")
         self.init_amount = abs(self.balance)
         self.partial_amount = self.init_amount
     
-    @Saveable.affects_metadata(log_msg="Settled up member")
     def finalize_settle_up(self):
         if not self.is_settled():
             raise ValueError(f"Member {self.name} is not settled, yet. Can't finalize settling up process.")
@@ -336,13 +349,11 @@ class Member(Saveable):
         if os.path.exists(file_path):
             with open(file_path,'r') as file:
                 data_dict = json.load(file)
-            print(json.dumps(data_dict,indent=4))
             if self.id in data_dict['members_from_id'] and data_dict['members_from_id'][self.id]['name'] != self.name:
                 raise Exception("Two members share the same id, this is a bug.")
             
             data_dict['members_from_id'][self.id] = member_dict
             data_dict['members_from_name'][self.name] = member_dict
-            print(json.dumps(data_dict,indent = 4))
         else:
             data_dict = {
                 'members_from_id': {self.id: member_dict},

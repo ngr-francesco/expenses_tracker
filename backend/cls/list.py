@@ -24,7 +24,7 @@ class ListItem(ObjectWithId):
                  name,
                  bought_by,
                  amount = 0,
-                 members_involved = MembersList(), 
+                 members_involved = None, 
                  sharing_method = SharingMethods.EQUAL, 
                  percentages = {}, 
                  amounts = {}, 
@@ -36,6 +36,8 @@ class ListItem(ObjectWithId):
         self.name = name
         self.bought_by = bought_by
         self.amount = amount
+        if members_involved is None:
+            members_involved = MembersList(self)
         self.members_involved = members_involved
         self.shares = self.calculate_shares(sharing_method, percentages, amounts, sharing_weight_name)
         self.update_member_balances()
@@ -87,7 +89,7 @@ class ListItem(ObjectWithId):
         self.bought_by.add_to_spent_total(self.amount)
         self.bought_by.add_to_balance(self.amount)
         for m in self.members_involved:
-            m.balance.add_to_balance(-self.shares[m.id])
+            m.add_to_balance(-self.shares[m.id])
     
     def edit_field(self,field,value):
         if hasattr(self,field):
@@ -117,6 +119,7 @@ class ListItem(ObjectWithId):
 default_lists_dir = os.path.join(default_data_dir,'ungrouped_lists')
 
 class List(Saveable):
+    @Saveable.takes_class_snapshot
     def __init__(self,name:str = '', 
                  members: ty.List[ty.Union[str,Member]] = [], 
                  data_dir: str = default_lists_dir, 
@@ -127,16 +130,16 @@ class List(Saveable):
                  cycle_length = None):
         super().__init__()
         self.name = name
-        
-        self.members = MembersList(members)
-
-        self.items = {}
         self.file_name = f'{self.id}_{file_name}'
         self.data_dir = os.path.join(data_dir , f'List_{self.id}')
         self.group_name = group_name
         self.cycle_length = cycle_length
-        # To make sure all the required attributes were set I first
-        # set them, then if the list should be loaded from file, we load it.
+
+        self.members = MembersList(self, members)
+
+        self.items = {}
+        # To make sure all the required attributes are defined we first
+        # define them, then if the list should be loaded from file, we load it.
         if load_from_file:
             list_loaded = self.load(load_file_path)
         

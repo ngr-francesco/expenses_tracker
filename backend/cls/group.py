@@ -9,12 +9,13 @@ from backend.cls.saveable import Saveable
 
 
 class Group(Saveable):
+    @Saveable.takes_class_snapshot
     def __init__(self,name,members = None, data_dir = default_data_dir, load_from_file = False, load_file_path = ''):
         super().__init__()
         self.name = name
         self.data_dir = data_dir + 'Group_' + self.id
         self.file_name = f'{self.id}_group_info.json'
-        self.members = MembersList(members)
+        self.members = MembersList(self,members)
         self.lists = {}
         self.save_data()
 
@@ -69,7 +70,7 @@ class Group(Saveable):
             os.makedirs(self.data_dir)
         with open(os.path.join(self.data_dir,self.file_name),'w+') as file:
             json.dump(self.summary(),file, indent = 4)
-    
+
     def load(self, path= None):
         # It's the case when reloading the backend
         if not path:

@@ -16,11 +16,3 @@ def save_all():
     """
     for instance in Saveable._instances:
         instance.save_data()
-
-class SharingWeight:
-    def __init__(self,name, value = 1):
-        self.name = name
-        self.value = value
-    
-    def tuple(self):
-        return (self.name,self.value)
