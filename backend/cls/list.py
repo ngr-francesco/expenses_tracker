@@ -234,6 +234,13 @@ class List(Saveable):
     def sort_items_ascending(self):
         sorted_dict = dict(sorted(self.items.items(), key = lambda item: item[0]))
         return sorted_dict
+    
+    @Saveable.affects_metadata("Changing directory for saved data.")
+    def change_data_dir(self,new_path):
+        if not os.path.exists(new_path):
+            self.logger.warning("New data directory does not exist. Aborting.")
+        self.remove_saved_data()
+        self.data_dir = os.path.join(new_path,f'List_{self.id}')
 
     
     @Saveable.affects_metadata("Adding member to list's included members")

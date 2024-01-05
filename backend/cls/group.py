@@ -1,7 +1,7 @@
-from member import Member, MembersList
+from backend.cls.member import Member, MembersList
 import os
 import json
-from list import List
+from backend.cls.list import List
 
 from backend.utils.const import default_data_dir
 from backend.cls.saveable import Saveable
@@ -10,10 +10,10 @@ from backend.cls.saveable import Saveable
 
 class Group(Saveable):
     @Saveable.takes_class_snapshot
-    def __init__(self,name,members = None, data_dir = default_data_dir, load_from_file = False, load_file_path = ''):
+    def __init__(self,name,members: MembersList = None, data_dir = default_data_dir, load_from_file = False, load_file_path = ''):
         super().__init__()
         self.name = name
-        self.data_dir = data_dir + 'Group_' + self.id
+        self.data_dir = os.path.join(data_dir, 'Group_' + self.id)
         self.file_name = f'{self.id}_group_info.json'
         self.members = MembersList(self,members)
         self.lists = {}
@@ -41,8 +41,15 @@ class Group(Saveable):
         self.members.remove_member(id)
     
     @Saveable.affects_metadata(log_msg="Addded new list")
-    def add_list(self,list):
-        self.lists[list.id] = list
+    def add_list(self,new_list: List):
+        for member in new_list.members:
+            if not member in self.members:
+                raise ValueError(f"Given list contains members not part of this group: "
+                                 f"group members: {self.members.names}\nlist members: {new_list.members.names}")
+        if new_list.data_dir != self.data_dir:
+            self.logger.warning(f"List was previously in a different group/directory: {new_list.data_dir}")
+            new_list.change_data_dir(self.data_dir)
+        self.lists[new_list.id] = new_list
     
     @Saveable.affects_metadata(log_msg="Removed list")
     def remove_list(self,list = None, id = None):
@@ -57,11 +64,9 @@ class Group(Saveable):
             'data_dir': self.data_dir,
             'time_created': self.time_created,
             'lists' : {
-                l.id : os.path.join(l.data_dir,l.file_name) for l in self.lists
+                l.id : os.path.join(l.data_dir,l.file_name) for l in self.lists.values()
             },
-            'members': {
-                m.id: m.group_summary() for m in self.members.values()
-            }
+            'members': self.members.summary()
         }
         return summary_dict
     

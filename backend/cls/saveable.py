@@ -2,6 +2,7 @@ from backend.utils.logging import get_logger
 from backend.utils.time import get_timestamp_numerical, is_valid_timestamp
 from backend.cls.object_with_id import ObjectWithId
 from weakref import WeakSet
+import os
 from copy import deepcopy
 
 class Version:
@@ -20,6 +21,7 @@ class Saveable(ObjectWithId):
         self._version_history = [Version(self._capture_state())]
         self._current_version = -1
         self._just_undid_redid = False
+        self.data_dir = None
 
     @property
     def logger(self):
@@ -99,8 +101,6 @@ class Saveable(ObjectWithId):
     def _capture_state(self):
         self.logger.debug("Capturing state to add to undo/redo versions")
         snapshot = deepcopy(self,)
-        if hasattr(snapshot,'members'):
-            print(len(snapshot.members))
         return snapshot
 
     def _restore_state(self,state):
@@ -109,6 +109,14 @@ class Saveable(ObjectWithId):
             if key.startswith('_'):
                 continue
             setattr(self,key,attr)
+    
+    def remove_saved_data(self):
+        if os.path.exists(self.data_dir):
+            os.rmdir(self.data_dir)
+            self.logger.debug("Removed pre-existing data from storage.")
+        else:
+            self.logger.debug("No data to remove.")
+
 
     def save_data(self):
         raise NotImplementedError("method 'save_data' must be implemented in children of Saveable class")
