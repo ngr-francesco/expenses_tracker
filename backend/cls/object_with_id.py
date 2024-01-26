@@ -26,6 +26,7 @@ class ObjectWithId:
         """
         if self._can_be_set:
             IdFactory.roll_back_id(self,self._id)
+            IdFactory.check_id_against_type(type(self),new_id)
             self._id = new_id
             self._can_be_set = False
         else:

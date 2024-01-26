@@ -1,6 +1,7 @@
-from backend.utils.const import EUROCENT, STATUS, MSG, default_data_dir
+from backend.utils.const import EUROCENT, STATUS, MSG
+from backend.settings import prefs
 from backend.utils.logging import get_logger
-from backend.cls.transaction import Transaction
+from backend.cls.transactions import Transaction
 from backend.utils.ids import is_uuid4
 from backend.cls.saveable import Saveable
 from backend.utils.decorators import requires_reload
@@ -16,109 +17,6 @@ class SharingWeight:
     
     def tuple(self):
         return (self.name,self.value)
-
-class MembersList:
-    def __init__(self, owner, members = None):
-        self.logger = get_logger(type(self).__name__)
-        self.members_by_id = {}
-        self.members_by_name = {}
-        # Reports are only useful for groups and lists, not for lower level classes
-        self.reports_dir = os.path.join(owner.data_dir,'balance_summaries') if hasattr(owner,'data_dir') else None
-        self.summary_type = 'list_summary' if type(owner).__name__ =='List' else 'extended_summary'
-        self.index = 0
-        if members:
-            assert isinstance(members,(list,MembersList)), "members argument to List must be a list or MembersList"
-            assert type(members[0]) == Member, "members list must contain Member objects"
-            for member in members:
-                self.add_member(member)
-            
-    @property
-    def ids(self):
-        return [id for id in self.members_by_id]
-    @property
-    def names(self):
-        return [name for name in self.members_by_name]
-
-    def get_by_name(self, name):
-        return self.members_by_name[name]
-
-    def get_by_id(self, id):
-        return self.members_by_id[id]
-    
-    def get(self,name_or_id):
-        """
-        Generalized get function with a bit of overhead.
-        """
-        if name_or_id in self.members_by_id and name_or_id in self.members_by_name:
-            raise ValueError(f"Something is wrong, given name or id is in both by_id and by_name dictionaries {name_or_id}.")
-        if name_or_id in self.members_by_id:
-            return self.get_by_id(name_or_id)
-        if name_or_id in self.members_by_name:
-            return self.get_by_name(name_or_id)
-
-    def summary(self):
-        return {member.id : getattr(member,self.summary_type)() for member in self}
-
-    def add_member(self, member):
-        if member in self:
-            self.logger.warning(f"Member already in MemberList {member.name}{member.id}")
-            return
-        self.members_by_id[member.id] = member
-        self.members_by_name[member.name] = member
-    
-    def add_member_from_dict(self,m_dict):
-        member = Member(id = m_dict["id"])
-        member.set_data(m_dict)
-        self.add_member(member)
-    
-    def load_members_from_dict(self, data_dict):
-        for m_dict in data_dict.values():
-            self.add_member_from_dict(m_dict)
-
-    def remove_member(self,member):
-        if isinstance(member,str):
-            member = self.get(member)
-        if not member in self:
-            self.logger.warning(f"Member not in MemberList {member.name}{member.id}")
-            return
-        self.members_by_id.pop(member.id)
-        self.members_by_name.pop(member.name)
-    
-    def balance_report(self, save_to_file = False):
-        if self.reports_dir is None:
-            self.logger.warning("Saving reports is not supported for this instance of MembersList.")
-            return
-
-        bal_report = {
-            m.name : m.balance_summary() for m in self.members_by_name
-        }
-        if save_to_file:
-            if not os.path.exists(self.reports_dir):
-                os.makedirs(self.reports_dir)
-            file_name = f'balance_summary_{get_timestamp_numerical()}.json'
-            with open(os.path.join(self.reports_dir,file_name),'w+') as file:
-                json.dump(bal_report, file, indent = 4)
-        return bal_report
-    
-    # Dunder overloads
-    
-    def __contains__(self,member):
-        return member.id in self.members_by_id and member.name in self.members_by_name
-    
-    def __iter__(self):
-        self.index = 0
-        return self
-    
-    def __next__(self):
-        if self.index < len(self.members_by_id):
-            next_item = list(self.members_by_id.values())[self.index]
-            self.index += 1
-            return next_item
-        else:
-            raise StopIteration
-    
-    def __len__(self):
-        return len(self.members_by_id)
 
 
 class Member(Saveable):
@@ -138,6 +36,7 @@ class Member(Saveable):
         self.name = name
         self.user_id = None
         # Member data used by lists and groups
+        self.involved_in = set()
         self._settled = False
         self.status = status
         self.balance = balance
@@ -153,6 +52,8 @@ class Member(Saveable):
         
         if not new_member:
             loaded_member = self.load(name,id)
+            # This is saved as a list so we need to convert it to a set again
+            self.involved_in = set(self.involved_in)
             
         # If a usr_id was given we connect this member to that user
         if usr_id:
@@ -182,14 +83,14 @@ class Member(Saveable):
         return self.user_id is not None
     
     def load(self,name = '', id = None):
-        file_path = os.path.join(default_data_dir,default_members_file)
+        file_path = os.path.join(prefs.data_dir,default_members_file)
         member_dict = {}
         # When reloading this is the case
         if not name and not id and len(self.name):
             name = self.name
 
         if os.path.exists(file_path):
-            with open(os.path.join(default_data_dir,default_members_file),'r') as file:
+            with open(os.path.join(prefs.data_dir,default_members_file),'r') as file:
                 data = json.load(file)
                 if id and id in data['members_from_id']:
                     member_dict = data['members_from_id'][id]
@@ -282,7 +183,8 @@ class Member(Saveable):
             'id' : self.id,
             'name' : self.name,
             'user_id': self.user_id,
-            'time_created': self.time_created
+            'time_created': self.time_created,
+            'involved_in': list(self.involved_in)
         }
         return summary_dict
     
@@ -326,7 +228,7 @@ class Member(Saveable):
     @requires_reload
     def rename(self,new_name: str):
         print("Renaming member")
-        file_path = os.path.join(default_data_dir,default_members_file)
+        file_path = os.path.join(prefs.data_dir,default_members_file)
         # We need to remove the old entry in the all_members file
         if os.path.exists(file_path):
             with open(file_path,'r') as file:
@@ -345,7 +247,7 @@ class Member(Saveable):
 
     def save_data(self):
         member_dict = self.member_summary()
-        file_path = os.path.join(default_data_dir,default_members_file)
+        file_path = os.path.join(prefs.data_dir,default_members_file)
         if os.path.exists(file_path):
             with open(file_path,'r') as file:
                 data_dict = json.load(file)
@@ -365,6 +267,113 @@ class Member(Saveable):
         with open(file_path, 'w+') as file:
             json.dump(data_dict, file, indent=4)
         self.logger.debug(f"Saved member data for {self.name}, with id: {self.id} to file {file_path}")
+
+class MembersList:
+    def __init__(self, owner, members = None):
+        self.logger = get_logger(type(self).__name__)
+        self.members_by_id = {}
+        self.members_by_name = {}
+        # Reports are only useful for Saveable classes (assured to have a data_dir, even if set to None)
+        self.reports_dir = os.path.join(owner.data_dir,'balance_summaries') if isinstance(owner,Saveable) else None
+        self.owner_id = owner.id
+        self.summary_type = 'list_summary' if type(owner).__name__ =='List' else 'extended_summary'
+        self.index = 0
+        if members:
+            assert isinstance(members,(list,MembersList)), "members argument to List must be a list or MembersList"
+            assert type(members[0]) == Member, "members list must contain Member objects"
+            for member in members:
+                self.add_member(member)
+            
+    @property
+    def ids(self):
+        return [id for id in self.members_by_id]
+    @property
+    def names(self):
+        return [name for name in self.members_by_name]
+
+    def get_by_name(self, name):
+        return self.members_by_name[name]
+
+    def get_by_id(self, id):
+        return self.members_by_id[id]
+    
+    def get(self,name_or_id):
+        """
+        Generalized get function with a bit of overhead.
+        """
+        if name_or_id in self.members_by_id and name_or_id in self.members_by_name:
+            raise ValueError(f"Something is wrong, given name or id is in both by_id and by_name dictionaries {name_or_id}.")
+        if name_or_id in self.members_by_id:
+            return self.get_by_id(name_or_id)
+        if name_or_id in self.members_by_name:
+            return self.get_by_name(name_or_id)
+
+    def summary(self):
+        return {member.id : getattr(member,self.summary_type)() for member in self}
+
+    def add_member(self, member: Member):
+        if member in self:
+            self.logger.warning(f"Member already in MemberList {member.name}{member.id}")
+            return
+        member.involved_in.add(self.owner_id)
+        self.members_by_id[member.id] = member
+        self.members_by_name[member.name] = member
+    
+    def add_member_from_dict(self,m_dict : dict):
+        member = Member(id = m_dict["id"])
+        member.set_data(m_dict)
+        self.add_member(member)
+    
+    def load_members_from_dict(self, data_dict : dict):
+        for m_dict in data_dict.values():
+            self.add_member_from_dict(m_dict)
+
+    def remove_member(self,member : Member):
+        if isinstance(member,str):
+            member = self.get(member)
+        if not member in self:
+            self.logger.warning(f"Member not in MemberList {member.name}{member.id}")
+            return
+        member.involved_in.remove(self.owner_id)
+        self.members_by_id.pop(member.id)
+        self.members_by_name.pop(member.name)
+    
+    def balance_report(self, save_to_file = False):
+        if self.reports_dir is None:
+            self.logger.warning("Saving reports is not supported for this instance of MembersList.")
+            return
+
+        bal_report = {
+            m.name : m.balance_summary() for m in self.members_by_name
+        }
+        if save_to_file:
+            if not os.path.exists(self.reports_dir):
+                os.makedirs(self.reports_dir)
+            file_name = f'balance_summary_{get_timestamp_numerical()}.json'
+            with open(os.path.join(self.reports_dir,file_name),'w+') as file:
+                json.dump(bal_report, file, indent = 4)
+        return bal_report
+    
+    # Dunder overloads
+    
+    def __contains__(self,member):
+        return member.id in self.members_by_id and member.name in self.members_by_name
+    
+    def __iter__(self):
+        self.index = 0
+        return self
+    
+    def __next__(self):
+        if self.index < len(self.members_by_id):
+            next_item = list(self.members_by_id.values())[self.index]
+            self.index += 1
+            return next_item
+        else:
+            raise StopIteration
+    
+    def __len__(self):
+        return len(self.members_by_id)
+
 
 
     

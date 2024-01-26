@@ -3,14 +3,14 @@ import os
 import json
 from backend.cls.list import List
 
-from backend.utils.const import default_data_dir
+from backend.settings import prefs
 from backend.cls.saveable import Saveable
 
 
 
 class Group(Saveable):
     @Saveable.takes_class_snapshot
-    def __init__(self,name,members: MembersList = None, data_dir = default_data_dir, load_from_file = False, load_file_path = ''):
+    def __init__(self,name,members: MembersList = None, data_dir = prefs.data_dir, load_from_file = False, load_file_path = ''):
         super().__init__()
         self.name = name
         self.data_dir = os.path.join(data_dir, 'Group_' + self.id)

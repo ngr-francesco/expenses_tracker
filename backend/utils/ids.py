@@ -1,9 +1,10 @@
 import json
 import os
 
-from backend.utils.const import default_data_dir
+from backend.settings import prefs
 from enum import Enum
 import uuid
+
 
 # TODO change this to the class definitions instead
 default_ids = {
@@ -12,6 +13,7 @@ default_ids = {
     'Group': 'gr0000',
     'List': 'ls0000',
     'Transaction': 'tr0000', 
+    'PendingTransactions': 'pt0000'
 }
 
 class IdTypes(Enum):
@@ -29,7 +31,7 @@ id_types = {
 }
 
 class IdFactory:
-    file_path = os.path.join(default_data_dir,'id_factory','ids.json')
+    file_path = os.path.join(prefs.data_dir,'id_factory','ids.json')
     try:
         with open(file_path,'r') as file:
             next_ids = json.load(file)
@@ -38,6 +40,17 @@ class IdFactory:
         dir_name = os.path.dirname(file_path)
         if not os.path.exists(dir_name):
             os.makedirs(dir_name)
+
+    @staticmethod
+    def check_id_against_type(obj_type, id):
+        if not obj_type.__name__ in IdFactory.next_ids:
+            raise ValueError(f"Invalid id for object {obj_type.__name__}, {id}")
+        if id[:2] != IdFactory.next_ids[obj_type.__name__]:
+            raise ValueError(f"Id for object {obj_type.__name__}, should start with "
+                             f"{IdFactory.next_ids[obj_type.__name__][:2]}, not {id[:2]} (full: {id})")
+        if int(id[2:]) > int(IdFactory.next_ids[obj_type.__name__]):
+            raise ValueError(f"Id of loaded object {obj_type.__name__} is not compatible with "
+                             f"ids stored in user data: {IdFactory.file_path}")
     
     @staticmethod
     def get_obj_id(obj):

@@ -7,9 +7,12 @@ import json
 import os
 
 from backend.utils.const import EUROCENT, STATUS
-from backend.cls.member import Member
+from backend.cls.member import Member, MembersList
 
 def sort_members(members_0: Union[list,Member], *add_members: Union[list,Member]) -> tuple[Member]:
+    """
+    Sort members by the amount owed or owed to them.
+    """
     members_list = [members_0]
     if add_members:
         for m in add_members:
@@ -25,18 +28,18 @@ class BalanceSettler:
     def __init__(self,members = [], folder_path = ''):
         self.debitors = []
         self.creditors = []
-        self.members = members
+        self.members = MembersList(owner=self)
         for member in members:
             self.add_person(member)
         
         self.folder_path = folder_path
     
-    def add_person(self,member = None, name = '',amount = '',status = None):
+    def add_person(self,member = None, name = '',amount:float = 0,status = None):
         if not status:
             status = STATUS.Debitor if amount < 0 else STATUS.Creditor
         if member is None:
             member = Member(name,balance=abs(amount), status=status)
-            self.members.append(member)
+            self.members.add_member(member)
         if status == STATUS.Debitor:
             self.debitors.append(member)
         else:
@@ -60,11 +63,11 @@ class BalanceSettler:
         debitor.process_transaction(creditor,amount)
         creditor.process_transaction(debitor,amount)
 
-    def settle_up(self):
+    def generate_settle_up_transactions(self):
 
         self.check_overall_balance()
         # Prepare members for settle up process
-        for member in members:
+        for member in self.members:
             member.begin_settle_up()
 
         debitors = self.debitors
@@ -77,18 +80,14 @@ class BalanceSettler:
                 self.transaction(cur_d,creditors[0])
                 creditors = sort_members(creditors)[0]
 
-        # Update members to keep track of settle up process
-        for member in members:
-            member.finalize_settle_up()
-
     def save_transaction_record(self, verbose = False):
         debitors_dict = {}
         for d in self.debitors:
-            debitors_dict[d.name] = d.summary()
+            debitors_dict[d.name] = d.transaction_summary()
 
         creditors_dict = {}
         for c in self.creditors:
-            creditors_dict[c.name] = c.summary()
+            creditors_dict[c.name] = c.transaction_summary()
 
         with open(os.path.join(self.folder_path,'debitors_transaction_record.json'), 'w+') as file:
             json.dump(debitors_dict, file, indent = 4)

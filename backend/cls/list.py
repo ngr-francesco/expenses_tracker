@@ -4,7 +4,8 @@ import typing as ty
 
 from backend.cls.member import Member, MembersList
 from backend.cls.saveable import Saveable
-from backend.utils.const import default_data_dir, EUROCENT
+from backend.utils.const import EUROCENT
+from backend.settings import prefs
 from backend.utils.time import get_timestamp_numerical
 from backend.cls.object_with_id import ObjectWithId
 
@@ -116,7 +117,7 @@ class ListItem(ObjectWithId):
         printable_summary = json.dumps(self.summary(), indent=4)
         return printable_summary
 
-default_lists_dir = os.path.join(default_data_dir,'ungrouped_lists')
+default_lists_dir = os.path.join(prefs.data_dir,'ungrouped_lists')
 
 class List(Saveable):
     @Saveable.takes_class_snapshot
