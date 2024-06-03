@@ -25,7 +25,7 @@ class BalanceCalculator:
     
     def add_member(self, member = None, name = '',spent_total = 0, days_spent = 0):
         if member is None:
-            member = Member(name,spent_total=spent_total,days_spent=days_spent)
+            member = Member(name = name,spent_total=spent_total,days_spent=days_spent)
         self.members.append(member)
         self.check_member_data()
         

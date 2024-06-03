@@ -27,9 +27,9 @@ class Group(Saveable):
     def add_member(self,member = None,name = '', id = None):
         if not member:
             if name: 
-                member = Member(name)
+                member = Member(name = name)
             elif id:
-                member = Member(id)
+                member = Member(id = id)
             else:
                 raise ValueError("No information regarding the member to be added was given.")
         self.members.add_member(member)

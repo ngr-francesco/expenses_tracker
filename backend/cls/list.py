@@ -143,14 +143,31 @@ class List(Saveable):
         # define them, then if the list should be loaded from file, we load it.
         if load_from_file:
             list_loaded = self.load(load_file_path)
+
+    def check_balance(func):
+        """
+        Decorator to check the balance of the list
+        any time its items are modified
+        """
+        def check_balance_wrapper(self,*args,**kwargs):
+            func(*args,**kwargs)
+            list_balance = 0
+            for m in self.members:
+                list_balance += m.balance
+            if abs(list_balance) > 2*EUROCENT:
+                raise ValueError("List balance is not zero, this is a bug.")
+        return check_balance_wrapper
+            
         
-    @Saveable.affects_metadata(log_msg="Adding item to list")   
+    @Saveable.affects_metadata(log_msg="Adding item to list")
+    @check_balance 
     def add_item(self,item: ty.Union[dict,ListItem]):
         if not isinstance(item, ListItem):
             item = ListItem(*item)
         self.items[item.id] = item
     
     @Saveable.affects_metadata(log_msg="Removing item from list")
+    @check_balance
     def remove_item(self,id):
         try:
             self.items.pop(id)
@@ -158,11 +175,13 @@ class List(Saveable):
             self.logger.warning(f"Item not in list {id}")
     
     @Saveable.affects_metadata(log_msg="Editing item in list")
+    @check_balance
     def edit_item(self,id,key,value):
         if type(value) != type(self.items[id][key]):
             raise ValueError(f"Existing key {key}:{self.items[id][key]} has different type than given key {value}")
         self.items[id].edit_field(key,value)
     
+    @check_balance
     def load(self,file_path = ''):
         if file_path == '':
             file_path = os.path.join(self.data_dir,self.file_name)
@@ -248,7 +267,7 @@ class List(Saveable):
     def add_member(self,member):
         # If an Id to be loaded from files is given, it will be a string
         if isinstance(member, str):
-            member = Member(member)
+            member = Member(id = member)
         if member.id in self.members.ids:
             raise ValueError(f"The member you're trying to add is already in this List {member.name}")
         self.members.add_member(member)

@@ -1,4 +1,4 @@
-from backend.utils.ids import IdFactory
+from backend.utils.ids import IdFactory, Id
 
 class ObjectWithId:
     """
@@ -25,9 +25,11 @@ class ObjectWithId:
         for debugging).
         """
         if self._can_be_set:
+            if not Id.is_id(new_id):
+                raise ValueError(f"Given Id is not in a compatible format! {new_id}")
             IdFactory.roll_back_id(self,self._id)
             IdFactory.check_id_against_type(type(self),new_id)
-            self._id = new_id
+            self._id = Id(new_id)
             self._can_be_set = False
         else:
             if new_id != self._id:

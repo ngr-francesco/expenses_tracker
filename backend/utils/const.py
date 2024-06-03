@@ -11,8 +11,9 @@ class ItemPrintEnum(Enum):
         return self.name
 
 class STATUS(ItemPrintEnum):
-    Debitor = 0
+    SettledUp = 0
     Creditor = 1
+    Debitor = 2
 
 class MSG(ItemPrintEnum):
     SENT = 0

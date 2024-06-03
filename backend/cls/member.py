@@ -7,6 +7,7 @@ from backend.cls.saveable import Saveable
 from backend.utils.decorators import requires_reload
 from backend.utils.time import get_timestamp_numerical
 import os, json
+from backend.utils.ids import Id
 
 default_members_file = 'all_members.json'
 
@@ -24,41 +25,46 @@ class Member(Saveable):
     @Saveable.takes_class_snapshot
     def __init__(self,
                  name = '',
+                 id = None,
                  balance = 0,
-                 status = None, 
                  spent_total = 0, 
                  sharing_weights = None, 
-                 id = None,
-                 usr_id = None,
-                 new_member = False):
+                 usr_id = None):
         super().__init__()
         # Id data
+        # If a member is initialized through their id (no given name)
+        if Id.is_id(name):
+            id = name
+            name = ''
         self.name = name
         self.user_id = None
         # Member data used by lists and groups
         self.involved_in = set()
         self._settled = False
-        self.status = status
         self.balance = balance
         self.spent_total = spent_total
-        self.sharing_weights = sharing_weights if sharing_weights else [SharingWeight('weight')]
-        self.transactions = []
-        # Quantities required to calculate balances
-        self.partial_amount = 0
-        self.init_amount = 0
-
-        self.logger.debug(f"Initialized member: {name} status: {status} for amount: {balance}")
+        self.sharing_weights = sharing_weights if sharing_weights else [SharingWeight('weight')]      
         
-        
-        if not new_member:
-            loaded_member = self.load(name,id)
+        loaded_member = self.load(name,id)
+        if loaded_member:
             # This is saved as a list so we need to convert it to a set again
             self.involved_in = set(self.involved_in)
             
         # If a usr_id was given we connect this member to that user
         if usr_id:
             self.connect_to_usr_profile(usr_id)
+
+        self.logger.debug(f"Initialized member: {name} status: {self.status} for amount: {balance}")
         self.save_data()
+
+    @property
+    def status(self):
+        if abs(self.balance) < EUROCENT:
+            return STATUS.SettledUp
+        elif self.balance > 0:
+            return STATUS.Creditor
+        
+        return STATUS.Debitor
 
     @Saveable.affects_metadata(log_msg="Changed member balance")
     def add_to_balance(self,amount):
@@ -81,31 +87,6 @@ class Member(Saveable):
         Check if this member is connected to an external user profile
         """
         return self.user_id is not None
-    
-    def load(self,name = '', id = None):
-        file_path = os.path.join(prefs.data_dir,default_members_file)
-        member_dict = {}
-        # When reloading this is the case
-        if not name and not id and len(self.name):
-            name = self.name
-
-        if os.path.exists(file_path):
-            with open(os.path.join(prefs.data_dir,default_members_file),'r') as file:
-                data = json.load(file)
-                if id and id in data['members_from_id']:
-                    member_dict = data['members_from_id'][id]
-                elif id is None and name in data['members_from_name']:
-                    member_dict = data['members_from_name'][name]
-                else:
-                    self.logger.warning(f"Member {name} with given id: {id} was not found in members file.")
-                    return
-                
-            for key,value in member_dict.items():
-                setattr(self,key,value)
-            return True
-        else:
-            self.logger.warning("Trying to load member data from non-existing file.")
-            return False
         
     @Saveable.takes_class_snapshot
     def set_data(self,data_dict):
@@ -128,51 +109,10 @@ class Member(Saveable):
                 self.logger.debug(f"Attribute {key} retrieved from data_dict is not in Member class attributes, ignoring it.")
     
     def is_settled(self):
-        if not self._settled and self.partial_amount < EUROCENT:
+        if not self._settled and abs(self.balance) < EUROCENT:
             self._settled = True
-            self.partial_amount = 0
+            self.balance = 0
         return self._settled
-    
-    @Saveable.affects_metadata(log_msg="Settled up member")
-    def begin_settle_up(self):
-        self.logger.debug(f"Preparing to settle up {self.name}, balance = {self.balance}")
-        self.init_amount = abs(self.balance)
-        self.partial_amount = self.init_amount
-    
-    def finalize_settle_up(self):
-        if not self.is_settled():
-            raise ValueError(f"Member {self.name} is not settled, yet. Can't finalize settling up process.")
-        self.clear_transactions()
-        self.balance = 0
-        self.partial_amount = 0
-        self.spent_total -= self.balance
-        del self.init_amount
-
-    @Saveable.affects_metadata(log_msg="Clearing transactions list")   
-    def clear_transactions(self):
-        if not self.is_settled():
-            self.logger.warning("You are clearing the transaction of a member which is not yet settled up."
-                                " this will most likely affect the overall balance of this group/list")
-        self.transactions = []
-        self.logger.debug("Saving member data after clearing transactions")
-    
-    @Saveable.affects_metadata(log_msg="Processing transaction to/from other member")
-    def process_transaction(self,person,amount):
-        if self.is_settled():
-            self.logger.warn("You are about to make a transaction with a settled up person. This is rarely the intended behavior.")
-        self.partial_amount -= amount
-        if self.status == STATUS.Debitor:
-            sender = self
-            receiver = person
-        else:
-            sender = person
-            receiver = self
-        sent_received = MSG.SENT if self.status == STATUS.Debitor else MSG.RECEIVED
-        transaction = Transaction(sender = sender,receiver= receiver, amount = round(amount,2),sent_received = sent_received)
-        if self.partial_amount < -EUROCENT:
-            raise ValueError(f"This transaction between {self.name} to {person.name} for {amount}€ surpasses the partial"
-                             f" amount of {self.name} of {self.partial_amount}")
-        self.transactions.append(transaction)
 
     def member_summary(self):
         """
@@ -185,16 +125,6 @@ class Member(Saveable):
             'user_id': self.user_id,
             'time_created': self.time_created,
             'involved_in': list(self.involved_in)
-        }
-        return summary_dict
-    
-    def transaction_summary(self):
-        summary_dict = {
-            'id': self.id,
-            'status': str(self.status),
-            "balance": self.balance,
-            'transactions': [str(trans) for trans in self.transactions], 
-            'settled': self.is_settled(),
         }
         return summary_dict
     
@@ -221,9 +151,6 @@ class Member(Saveable):
         summary_dict['sharing_weights'] = [weight.tuple() for weight in self.sharing_weights]
         return summary_dict
     
-    def __json__(self):
-        return self.id
-    
     @Saveable.affects_metadata(log_msg="Renamed member.")
     @requires_reload
     def rename(self,new_name: str):
@@ -242,7 +169,6 @@ class Member(Saveable):
                 data_dict['members_from_name'].pop(self.name)
         self.name = new_name
         return 0
-
 
 
     def save_data(self):
@@ -268,28 +194,56 @@ class Member(Saveable):
             json.dump(data_dict, file, indent=4)
         self.logger.debug(f"Saved member data for {self.name}, with id: {self.id} to file {file_path}")
 
+    def load(self,name = '', id = None):
+        file_path = os.path.join(prefs.data_dir,default_members_file)
+        member_dict = {}
+        # When reloading this is the case!
+        if not name and not id and len(self.name):
+            name = self.name
+
+        if os.path.isfile(file_path):
+            with open(file_path,'r') as file:
+                data = json.load(file)
+                if id and id in data['members_from_id']:
+                    member_dict = data['members_from_id'][id]
+                elif id is None and name in data['members_from_name']:
+                    member_dict = data['members_from_name'][name]
+                else:
+                    self.logger.warning(f"Member {name} with given id: {id} was not found in members file.")
+                    return False
+            if not 'name' in member_dict:
+                raise ValueError(f"Member entry for member {id} doesn't have a name. This should never happen.")
+                
+            for key,value in member_dict.items():
+                setattr(self,key,value)
+            return True
+        else:
+            self.logger.debug("Trying to load member data from non-existing file. If you're making a new member it's all good.")
+            return False
+
 class MembersList:
-    def __init__(self, owner, members = None):
+    def __init__(self, owner: Saveable = None, members = None):
         self.logger = get_logger(type(self).__name__)
         self.members_by_id = {}
         self.members_by_name = {}
         # Reports are only useful for Saveable classes (assured to have a data_dir, even if set to None)
-        self.reports_dir = os.path.join(owner.data_dir,'balance_summaries') if isinstance(owner,Saveable) else None
-        self.owner_id = owner.id
+        self.reports_dir = None
+        self.owner_id = None
+        if isinstance(owner,Saveable):
+            self.reports_dir = os.path.join(owner.data_dir,'balance_summaries')
+            self.owner_id = owner.id
         self.summary_type = 'list_summary' if type(owner).__name__ =='List' else 'extended_summary'
         self.index = 0
         if members:
-            assert isinstance(members,(list,MembersList)), "members argument to List must be a list or MembersList"
-            assert type(members[0]) == Member, "members list must contain Member objects"
+            assert isinstance(members,(list)), f"Arg. 'members' expected to be of type {type(list)}, got {type(members)}."
+            assert type(members[0]) == Member, f"Arg. 'members' must contain {Member} objects"
             for member in members:
                 self.add_member(member)
             
-    @property
-    def ids(self):
-        return [id for id in self.members_by_id]
-    @property
-    def names(self):
-        return [name for name in self.members_by_name]
+    ids = property(lambda self: [id for id in self.members_by_id])
+    names = property(lambda self: [name for name in self.members_by_name])
+    debitors = property(lambda self : [m for m in self.members_by_id.values() if m.status == STATUS.Debitor])
+    creditors = property(lambda self : [m for m in self.members_by_id.values() if m.status == STATUS.Creditor])
 
     def get_by_name(self, name):
         return self.members_by_name[name]
@@ -315,7 +269,8 @@ class MembersList:
         if member in self:
             self.logger.warning(f"Member already in MemberList {member.name}{member.id}")
             return
-        member.involved_in.add(self.owner_id)
+        if self.owner_id:
+            member.involved_in.add(self.owner_id)
         self.members_by_id[member.id] = member
         self.members_by_name[member.name] = member
     
@@ -334,7 +289,8 @@ class MembersList:
         if not member in self:
             self.logger.warning(f"Member not in MemberList {member.name}{member.id}")
             return
-        member.involved_in.remove(self.owner_id)
+        if self.owner_id:
+            member.involved_in.remove(self.owner_id)
         self.members_by_id.pop(member.id)
         self.members_by_name.pop(member.name)
     
@@ -354,8 +310,16 @@ class MembersList:
                 json.dump(bal_report, file, indent = 4)
         return bal_report
     
-    # Dunder overloads
+    def sort_by_balance(self,descending = True):
+        return dict(sorted(self.members_by_id.items(),key = lambda item: item[1].balance, reverse = descending))
     
+    def sort_by_partial_amount(self, descending = True):
+        """
+        Useful for settling up.
+        """
+        return dict(sorted(self.members_by_id.items(),key = lambda item: item[1].partial_amount, reverse = descending))        
+    
+    # Dunder overloads
     def __contains__(self,member):
         return member.id in self.members_by_id and member.name in self.members_by_name
     

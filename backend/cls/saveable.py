@@ -46,7 +46,7 @@ class Saveable(ObjectWithId):
         def outer_wrapper(func):
             def inner_wrapper(self,*args,**kwargs):
                 func(self,*args,**kwargs)
-                msg = f"Saving {type(self).__name__} {self.name} after operation:" + log_msg
+                msg = f"Saving {type(self).__name__} {self.id} after operation:" + log_msg
                 self.logger.debug(msg)
                 self.save_version()
                 self.save_data()
